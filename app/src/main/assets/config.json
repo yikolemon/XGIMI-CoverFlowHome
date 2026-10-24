@@ -1,0 +1,41 @@
+{
+  "cover_flow": true,
+  "dock_apps": [
+    "io.github.grahamzen.anime.tv",
+    "com.xyoye.dandanplay",
+    "com.netease.filmlytv",
+    "com.V2.blb5"
+  ],
+  "app_labels": [
+    "io.github.grahamzen.anime.tv=Izuko",
+    "com.xyoye.dandanplay=弹弹play",
+    "com.netease.filmlytv=网易爆米花",
+    "com.V2.blb5=BBLL"
+  ],
+  "columns": 4,
+  "fill_dock": false,
+  "dock_row": true,
+  "dock_title": true,
+  "rows_below_dock": 0,
+  "always_show_names": true,
+  "app_library": true,
+  "library_button": true,
+  "icon_only_buttons": true,
+  "show_network_pill": false,
+  "show_settings_button": false,
+  "show_inputs_button": false,
+  "background_color": "#080E1C",
+  "wallpaper": true,
+  "wallpaper_rotation_minutes": 30,
+  "wallpaper_order": "sequential",
+  "wallpaper_dim": 25,
+  "wallpaper_true_color": false,
+  "ambient_glow": false,
+  "cinematic_home": false,
+  "animations": true,
+  "reduced_motion": true,
+  "advanced_effects": false,
+  "module_cards": false,
+  "input_action": "com.xgimi.action.hdmiPlayer",
+  "live_tv_package": ""
+}

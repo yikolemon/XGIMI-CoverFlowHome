@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">极米桌面</string>
+  <string name="date_format_home">M月d日 · EEEE</string>
+  <string name="app_library">应用库</string>
+  <plurals name="library_app_count">
+    <item quantity="other">%d 个应用</item>
+  </plurals>
+  <string name="library_save_failed">无法保存更改。</string>
+  <string name="library_open">打开</string>
+  <string name="library_add_home">添加到首页</string>
+  <string name="library_remove_shortcut">从首页移除</string>
+  <string name="library_app_info">应用信息</string>
+  <string name="library_on_home">已在首页</string>
+  <string name="cover_flow_all_apps">全部应用</string>
+  <string name="cover_flow_instructions">左右切换 · 确定打开 · 上键进入应用库</string>
+  <string name="cover_flow_empty">首页暂无应用，请进入应用库添加。</string>
+  <string name="cover_flow_unavailable">无法打开此应用。</string>
+  <string name="cover_flow_move_left">首页顺序已到最左侧</string>
+  <string name="cover_flow_move_right">首页顺序已到最右侧</string>
+  <string name="cover_flow_order_edge">已到该方向的边界</string>
+  <string name="cover_flow_order_saved">首页顺序已保存。</string>
+  <string name="cover_flow_library_hint">确定打开 · 长按可排序或移除</string>
+  <string name="home_library_home">首页应用 · %1$d 个 · 按首页顺序</string>
+  <string name="home_library_others">其他应用 · %1$d 个</string>
+  <string name="home_library_hint">所有应用短按打开 · 长按首页应用可排序或移除，长按其他应用可添加</string>
+  <string name="home_library_other_detail">长按添加到首页</string>
+  <string name="home_library_other_hint">确定打开 · 长按添加到首页</string>
+  <string name="home_library_empty">首页还没有应用，可从下方添加。</string>
+  <string name="home_library_all_added">所有可启动应用均已添加到首页。</string>
+  <string name="home_library_sort">调整首页顺序</string>
+  <string name="home_library_sort_hint">← → 移动 · 确定保存 · 返回取消</string>
+  <string name="home_library_moving">← 正在移动 →</string>
+  <string name="wallpaper_applied">壁纸已更新。</string>
+</resources>
