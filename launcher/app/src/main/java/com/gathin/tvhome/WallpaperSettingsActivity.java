@@ -41,6 +41,7 @@ public final class WallpaperSettingsActivity extends Activity {
     private boolean busy;
     private TextView status, choose, folderChoice, theme;
     private Switch rotation;
+    private LinearLayout rotationRow;
     private AlertDialog browser;
 
     @Override protected void onCreate(Bundle state) {
@@ -70,11 +71,18 @@ public final class WallpaperSettingsActivity extends Activity {
         choose = button(panel, R.string.local_wallpaper_choose, this::pick);
         folderChoice = button(panel, R.string.local_wallpaper_folder, this::pickFolder);
         rotation = new Switch(this);
-        rotation.setText(R.string.local_wallpaper_rotation);
-        rotation.setTextColor(Color.WHITE);
-        rotation.setTextSize(17);
-        styleChoice(rotation, false);
-        rotation.setOnFocusChangeListener((view, focused) -> styleChoice(rotation, focused));
+        rotationRow = new LinearLayout(this);
+        rotationRow.setGravity(Gravity.CENTER_VERTICAL);
+        rotationRow.setPadding(dp(20), 0, dp(20), 0);
+        TextView rotationLabel = text(getString(R.string.local_wallpaper_rotation), 17);
+        rotationLabel.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        rotationRow.addView(rotationLabel, new LinearLayout.LayoutParams(0, -1, 1));
+        rotation.setFocusable(false);
+        rotationRow.addView(rotation, new LinearLayout.LayoutParams(-2, -2));
+        rotationRow.setFocusable(true);
+        styleChoice(rotationRow, rotationLabel, false);
+        rotationRow.setOnFocusChangeListener((view, focused) -> styleChoice(rotationRow, rotationLabel, focused));
+        rotationRow.setOnClickListener(view -> { if (!busy) rotation.toggle(); });
         rotation.setChecked(getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE)
                 .getBoolean(Config.WALLPAPER_ROTATION_ENABLED_KEY, true));
         rotation.setOnCheckedChangeListener((button, checked) -> {
@@ -85,7 +93,7 @@ public final class WallpaperSettingsActivity extends Activity {
         LinearLayout.LayoutParams rotationParams = new LinearLayout.LayoutParams(dp(440), dp(54));
         rotationParams.gravity = Gravity.CENTER_HORIZONTAL;
         rotationParams.topMargin = dp(12);
-        panel.addView(rotation, rotationParams);
+        panel.addView(rotationRow, rotationParams);
         theme = button(panel, R.string.local_wallpaper_restore, () -> {
             UserWallpaper.useTheme(this);
             setResult(RESULT_OK);
@@ -131,12 +139,16 @@ public final class WallpaperSettingsActivity extends Activity {
     }
 
     private void styleChoice(TextView view, boolean focused) {
+        styleChoice(view, view, focused);
+    }
+
+    private void styleChoice(android.view.View view, TextView label, boolean focused) {
         GradientDrawable background = new GradientDrawable();
         background.setCornerRadius(dp(14));
         background.setColor(focused ? 0x3AFFFFFF : 0x14FFFFFF);
         background.setStroke(dp(focused ? 2 : 1), focused ? 0xEEFFFFFF : 0x35FFFFFF);
         view.setBackground(background);
-        view.setTextColor(focused ? Color.WHITE : 0xAAFFFFFF);
+        label.setTextColor(focused ? Color.WHITE : 0xAAFFFFFF);
     }
 
     private void pick() {
@@ -186,6 +198,7 @@ public final class WallpaperSettingsActivity extends Activity {
         choose.setEnabled(!value);
         folderChoice.setEnabled(!value);
         rotation.setEnabled(!value);
+        rotationRow.setEnabled(!value);
         theme.setEnabled(!value);
         status.setText(value ? R.string.local_wallpaper_working : R.string.local_wallpaper_failed);
     }
@@ -248,6 +261,7 @@ public final class WallpaperSettingsActivity extends Activity {
                     choose.setEnabled(true);
                     folderChoice.setEnabled(true);
                     rotation.setEnabled(true);
+                    rotationRow.setEnabled(true);
                     theme.setEnabled(true);
                     status.setText(R.string.local_wallpaper_browse_hint);
                     browser = new AlertDialog.Builder(this).setTitle(current.getPath())

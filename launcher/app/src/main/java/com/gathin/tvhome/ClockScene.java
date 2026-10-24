@@ -26,6 +26,15 @@ final class ClockScene {
     private final GradientDrawable glow;
     private int colorIndex;
     private int glowColor;
+    private ValueAnimator glowAnimator;
+    private boolean active;
+    private final Runnable reveal = new Runnable() {
+        @Override public void run() {
+            if (!active) return;
+            placeClock();
+            content.animate().alpha(1f).setDuration(1200).start();
+        }
+    };
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -50,21 +59,25 @@ final class ClockScene {
     }
 
     void start() {
+        active = true;
         content.setAlpha(0f);
-        content.post(() -> {
-            placeClock();
-            content.animate().alpha(1f).setDuration(1200).start();
-        });
+        content.removeCallbacks(reveal);
+        content.post(reveal);
         handler.removeCallbacks(tick);
         handler.postDelayed(tick, MOVE_MS);
     }
 
     void stop() {
+        active = false;
         handler.removeCallbacks(tick);
+        content.removeCallbacks(reveal);
+        content.animate().cancel();
+        if (glowAnimator != null) glowAnimator.cancel();
     }
 
     private void moveClock() {
         content.animate().alpha(0f).setDuration(900).withEndAction(() -> {
+            if (!active) return;
             placeClock();
             content.animate().alpha(1f).setDuration(1200).start();
         }).start();
@@ -89,6 +102,8 @@ final class ClockScene {
         int from = glowColor;
         colorIndex = (colorIndex + 1) % PALETTE.length;
         ValueAnimator anim = ValueAnimator.ofObject(new ArgbEvaluator(), from, PALETTE[colorIndex]);
+        if (glowAnimator != null) glowAnimator.cancel();
+        glowAnimator = anim;
         anim.setDuration(8000);
         anim.addUpdateListener(a -> setGlow((int) a.getAnimatedValue()));
         anim.start();
