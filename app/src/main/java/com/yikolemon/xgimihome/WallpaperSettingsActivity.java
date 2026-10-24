@@ -14,8 +14,10 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.view.Gravity;
 import android.widget.LinearLayout;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.graphics.drawable.GradientDrawable;
 
 import java.io.File;
 import java.io.IOException;
@@ -35,7 +37,8 @@ public final class WallpaperSettingsActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private volatile boolean closed;
     private boolean busy;
-    private TextView status, choose, theme;
+    private TextView status, choose, theme, rotationLabel;
+    private Switch rotationSwitch;
     private AlertDialog browser;
 
     @Override protected void onCreate(Bundle state) {
@@ -66,6 +69,7 @@ public final class WallpaperSettingsActivity extends Activity {
             setResult(RESULT_OK);
             finish();
         });
+        addRotationToggle(panel);
         TextView hint = text(getString(R.string.local_wallpaper_hint), 13);
         hint.setTextColor(0x99FFFFFF);
         hint.setPadding(0, dp(20), 0, 0);
@@ -95,14 +99,64 @@ public final class WallpaperSettingsActivity extends Activity {
     private TextView button(LinearLayout panel, int label, Runnable click) {
         TextView view = text(getString(label), 17);
         view.setFocusable(true);
-        view.setBackgroundResource(R.drawable.glass_panel);
-        view.setOnFocusChangeListener((v, focus) -> view.setTextColor(focus ? Color.WHITE : 0xAAFFFFFF));
+        view.setFocusableInTouchMode(true);
+        view.setOnFocusChangeListener((v, focus) -> styleButton(view, focus));
+        styleButton(view, false);
         view.setOnClickListener(v -> { if (!busy) click.run(); });
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(440), dp(54));
         params.gravity = Gravity.CENTER_HORIZONTAL;
         params.topMargin = dp(12);
         panel.addView(view, params);
         return view;
+    }
+
+    private void styleButton(TextView view, boolean focused) {
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(focused ? 0x3AFFFFFF : 0x14FFFFFF);
+        background.setCornerRadius(dp(16));
+        background.setStroke(dp(focused ? 2 : 1), focused ? 0xE6FFFFFF : 0x45FFFFFF);
+        view.setBackground(background);
+        view.setTextColor(focused ? Color.WHITE : 0xB3FFFFFF);
+    }
+
+    private void addRotationToggle(LinearLayout panel) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(20), 0, dp(18), 0);
+        row.setFocusable(true);
+        row.setFocusableInTouchMode(true);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(440), dp(58));
+        params.gravity = Gravity.CENTER_HORIZONTAL;
+        params.topMargin = dp(12);
+        panel.addView(row, params);
+
+        rotationLabel = text(getString(R.string.local_wallpaper_rotation), 17);
+        rotationLabel.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(rotationLabel, new LinearLayout.LayoutParams(0, -1, 1));
+        rotationSwitch = new Switch(this);
+        rotationSwitch.setFocusable(false);
+        rotationSwitch.setClickable(false);
+        rotationSwitch.setChecked(Config.wallpaperRotationEnabled(this));
+        row.addView(rotationSwitch, new LinearLayout.LayoutParams(-2, -2));
+        row.setOnFocusChangeListener((view, focused) -> styleToggleRow(row, focused));
+        styleToggleRow(row, false);
+        row.setOnClickListener(view -> {
+            if (busy) return;
+            boolean enabled = !rotationSwitch.isChecked();
+            rotationSwitch.setChecked(enabled);
+            getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).edit()
+                    .putBoolean(Config.ROTATION_ENABLED_KEY, enabled).apply();
+            setResult(RESULT_OK);
+        });
+    }
+
+    private void styleToggleRow(LinearLayout row, boolean focused) {
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(focused ? 0x3AFFFFFF : 0x14FFFFFF);
+        background.setCornerRadius(dp(16));
+        background.setStroke(dp(focused ? 2 : 1), focused ? 0xE6FFFFFF : 0x45FFFFFF);
+        row.setBackground(background);
+        if (rotationLabel != null) rotationLabel.setTextColor(focused ? Color.WHITE : 0xB3FFFFFF);
     }
 
     private void pick() {

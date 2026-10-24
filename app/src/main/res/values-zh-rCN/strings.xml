@@ -35,6 +35,7 @@
     <string name="local_wallpaper_custom_details">自选图片 · %1$d×%2$d · %3$d KiB</string>
     <string name="local_wallpaper_choose">选择本地图片</string>
     <string name="local_wallpaper_restore">恢复主题壁纸</string>
+    <string name="local_wallpaper_rotation">自动切换壁纸 · 每 30 分钟</string>
     <string name="local_wallpaper_hint">图片会居中裁剪为 16:9，压缩至最高 1080p 后私有保存；只保留一张。</string>
     <string name="local_wallpaper_import_confirm">要将此图片导入为壁纸吗？</string>
     <string name="local_wallpaper_no_picker">系统没有图片选择器，请在文件管理器中分享图片到本桌面。</string>

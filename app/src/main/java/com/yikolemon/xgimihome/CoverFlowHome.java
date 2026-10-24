@@ -36,6 +36,7 @@ final class CoverFlowHome {
     private final Activity activity;
     private final Config config;
     private final long wallpaperRevision;
+    private final boolean rotationEnabled;
     private final FrameLayout root;
     private final CoverFlowView carousel;
     private final TextView libraryButton;
@@ -58,6 +59,7 @@ final class CoverFlowHome {
         this.activity = activity;
         this.config = config;
         wallpaperRevision = UserWallpaper.revision(activity);
+        rotationEnabled = config.wallpaperRotationMinutes > 0;
         density = activity.getResources().getDisplayMetrics().density;
         root = new FrameLayout(activity);
         root.setBackgroundColor(config.backgroundColor);
@@ -271,7 +273,9 @@ final class CoverFlowHome {
     }
 
     void resume() {
-        if (UserWallpaper.revision(activity) != wallpaperRevision) {
+        boolean currentRotation = activity.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(Config.ROTATION_ENABLED_KEY, rotationEnabled);
+        if (UserWallpaper.revision(activity) != wallpaperRevision || currentRotation != rotationEnabled) {
             activity.recreate();
             return;
         }

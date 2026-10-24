@@ -24,6 +24,7 @@ import java.util.Set;
 final class Config {
     static final String SETTINGS_NAME = "launcher_settings";
     static final String WALLPAPER_CHOICE_KEY = "wallpaper_choice";
+    static final String ROTATION_ENABLED_KEY = "wallpaper_rotation_enabled";
     static final int DEFAULT_WALLPAPER_ROTATION_MINUTES = 30;
 
     final List<String> dockApps;
@@ -67,8 +68,12 @@ final class Config {
         try { background = Color.parseColor(json.optString("background_color", "#080E1C")); }
         catch (IllegalArgumentException invalid) { background = Color.rgb(8, 14, 28); }
         boolean enabled = json.optBoolean("wallpaper", true);
-        int rotationMinutes = Math.max(0, Math.min(1440,
+        int configuredRotation = Math.max(0, Math.min(1440,
                 json.optInt("wallpaper_rotation_minutes", DEFAULT_WALLPAPER_ROTATION_MINUTES)));
+        boolean rotationEnabled = context.getSharedPreferences(SETTINGS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(ROTATION_ENABLED_KEY, configuredRotation > 0);
+        int rotationMinutes = rotationEnabled
+                ? (configuredRotation > 0 ? configuredRotation : DEFAULT_WALLPAPER_ROTATION_MINUTES) : 0;
         File themeDir = context.getExternalFilesDir(null);
         List<File> wallpapers = new ArrayList<>();
         if (enabled && themeDir != null) {
@@ -93,6 +98,13 @@ final class Config {
                 json.optBoolean("wallpaper_true_color", false), !wallpapers.isEmpty(),
                 json.optInt("wallpaper_dim", 25), rotationMinutes,
                 json.optString("wallpaper_order", WallpaperRotation.ORDER_SHUFFLE), wallpapers);
+    }
+
+    static boolean wallpaperRotationEnabled(Context context) {
+        JSONObject json = readJson(context);
+        int interval = json.optInt("wallpaper_rotation_minutes", DEFAULT_WALLPAPER_ROTATION_MINUTES);
+        return context.getSharedPreferences(SETTINGS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(ROTATION_ENABLED_KEY, interval > 0);
     }
 
     private static JSONObject readJson(Context context) {

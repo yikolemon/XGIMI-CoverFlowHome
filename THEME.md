@@ -1,6 +1,6 @@
 # Built-in XGIMI theme
 
-The standalone app ships with the configuration at `app/src/main/assets/config.json`, a default `wallpaper.jpg`, and 14 bundled images in `app/src/main/assets/wallpapers/`. By default, the bundled collection rotates in filename order every 30 minutes while Home is visible.
+The standalone app ships with the configuration at `app/src/main/assets/config.json`, a default `wallpaper.jpg`, and 14 bundled images in `app/src/main/assets/wallpapers/`. By default, the bundled collection rotates in filename order every 30 minutes while Home is visible. The wallpaper settings page includes a switch to turn rotation off or on.
 
 To customize without rebuilding, copy `config.json` and/or a `wallpaper.jpg` to:
 
