@@ -24,6 +24,7 @@ import java.util.Set;
 final class Config {
     static final String SETTINGS_NAME = "launcher_settings";
     static final String WALLPAPER_CHOICE_KEY = "wallpaper_choice";
+    static final int DEFAULT_WALLPAPER_ROTATION_MINUTES = 30;
 
     final List<String> dockApps;
     final List<String> hiddenApps;
@@ -66,16 +67,23 @@ final class Config {
         try { background = Color.parseColor(json.optString("background_color", "#080E1C")); }
         catch (IllegalArgumentException invalid) { background = Color.rgb(8, 14, 28); }
         boolean enabled = json.optBoolean("wallpaper", true);
+        int rotationMinutes = Math.max(0, Math.min(1440,
+                json.optInt("wallpaper_rotation_minutes", DEFAULT_WALLPAPER_ROTATION_MINUTES)));
         File themeDir = context.getExternalFilesDir(null);
         List<File> wallpapers = new ArrayList<>();
         if (enabled && themeDir != null) {
             wallpapers.addAll(WallpaperRotation.images(new File(themeDir, "wallpapers")));
             File wallpaper = new File(themeDir, "wallpaper.jpg");
             if (wallpapers.isEmpty() && wallpaper.isFile() && wallpaper.length() > 0) wallpapers.add(wallpaper);
-            if (wallpapers.isEmpty()) {
-                wallpaper = new File(context.getFilesDir(), "wallpaper.jpg");
-                if (copyDefaultWallpaper(context, wallpaper)) wallpapers.add(wallpaper);
-            }
+        }
+        if (enabled && wallpapers.isEmpty() && rotationMinutes > 0) {
+            File bundled = new File(context.getFilesDir(), "bundled_wallpapers");
+            copyBundledWallpapers(context, bundled);
+            wallpapers.addAll(WallpaperRotation.images(bundled));
+        }
+        if (enabled && wallpapers.isEmpty()) {
+            File wallpaper = new File(context.getFilesDir(), "wallpaper.jpg");
+            if (copyDefaultWallpaper(context, wallpaper)) wallpapers.add(wallpaper);
         }
         if (UserWallpaper.enabled(context)) {
             wallpapers.clear();
@@ -83,7 +91,7 @@ final class Config {
         }
         return new Config(dock, hidden, labels, json.optBoolean("animations", true), background,
                 json.optBoolean("wallpaper_true_color", false), !wallpapers.isEmpty(),
-                json.optInt("wallpaper_dim", 25), json.optInt("wallpaper_rotation_minutes", 0),
+                json.optInt("wallpaper_dim", 25), rotationMinutes,
                 json.optString("wallpaper_order", WallpaperRotation.ORDER_SHUFFLE), wallpapers);
     }
 
@@ -131,6 +139,30 @@ final class Config {
         } catch (Exception failure) {
             Log.w("XgimiHome.Config", "Bundled wallpaper unavailable", failure);
             return false;
+        }
+    }
+
+    private static void copyBundledWallpapers(Context context, File directory) {
+        String[] names;
+        try { names = context.getAssets().list("wallpapers"); }
+        catch (java.io.IOException failure) { return; }
+        if (names == null || names.length == 0 || (!directory.isDirectory() && !directory.mkdirs())) return;
+        for (String name : names) {
+            if (!name.toLowerCase(java.util.Locale.ROOT).matches(".*\\.(jpg|jpeg|png|webp)")) continue;
+            File target = new File(directory, name);
+            if (target.isFile() && target.length() > 0) continue;
+            File temporary = new File(directory, name + ".tmp");
+            try (InputStream input = context.getAssets().open("wallpapers/" + name);
+                 FileOutputStream output = new FileOutputStream(temporary)) {
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                output.getFD().sync();
+                if (!temporary.renameTo(target)) temporary.delete();
+            } catch (Exception failure) {
+                temporary.delete();
+                Log.w("XgimiHome.Config", "Could not extract bundled wallpaper " + name, failure);
+            }
         }
     }
 }

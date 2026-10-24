@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
@@ -27,6 +29,7 @@ final class WallpaperPlayer {
     private final String order;
     private final SharedPreferences preferences;
     private final ExecutorService decoder = Executors.newSingleThreadExecutor();
+    private final Handler rotationHandler = new Handler(Looper.getMainLooper());
     private final Random random = new Random();
     private final int width;
     /** config wallpaper_true_color: ARGB_8888 instead of RGB_565. */
@@ -37,6 +40,9 @@ final class WallpaperPlayer {
     private boolean loading;
     private String displayed = "";
     private Runnable imageChanged;
+    private final Runnable rotationCheck = () -> {
+        if (active && !closed) update();
+    };
 
     WallpaperPlayer(Context context, FrameLayout root, Config config) {
         this.root = root;
@@ -105,6 +111,7 @@ final class WallpaperPlayer {
 
     void stop() {
         active = false;
+        rotationHandler.removeCallbacks(rotationCheck);
     }
 
     void setOnImageChanged(Runnable listener) { imageChanged = listener; }
@@ -120,6 +127,7 @@ final class WallpaperPlayer {
         active = false;
         closed = true;
         imageChanged = null;
+        rotationHandler.removeCallbacks(rotationCheck);
         decoder.shutdownNow();
     }
 
@@ -131,7 +139,10 @@ final class WallpaperPlayer {
         if (selected == null || WallpaperRotation.due(changed, System.currentTimeMillis(), interval)) {
             selected = WallpaperRotation.pick(files, previous, order, random);
         }
-        if (selected == null || selected.getName().equals(displayed)) return;
+        if (selected == null || selected.getName().equals(displayed)) {
+            scheduleRotation();
+            return;
+        }
         File next = selected;
         loading = true;
         decoder.execute(() -> {
@@ -144,7 +155,7 @@ final class WallpaperPlayer {
                 }
                 if (bitmap == null) {
                     files.remove(next);
-                    Log.w("TvHome.Wallpaper", "Skipping unreadable image: " + next.getName());
+                    Log.w("XgimiHome.Wallpaper", "Skipping unreadable image: " + next.getName());
                     update();
                     return;
                 }
@@ -155,8 +166,20 @@ final class WallpaperPlayer {
                     preferences.edit().putString("image", displayed)
                             .putLong("changed", System.currentTimeMillis()).apply();
                 }
+                scheduleRotation();
             });
         });
+    }
+
+    /** Schedule one check at the next 30-minute boundary; no polling or animation while the Home is hidden. */
+    private void scheduleRotation() {
+        rotationHandler.removeCallbacks(rotationCheck);
+        if (!active || closed || interval <= 0 || files.size() < 2) return;
+        long changed = preferences.getLong("changed", 0);
+        long now = System.currentTimeMillis();
+        long elapsed = changed <= 0 || now < changed ? interval : now - changed;
+        long delay = elapsed >= interval ? 1_000L : interval - elapsed;
+        rotationHandler.postDelayed(rotationCheck, delay);
     }
 
     /** Names plus sizes: enough to notice a different collection without hashing every image. */

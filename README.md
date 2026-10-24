@@ -8,6 +8,7 @@ An independent Android TV home app with a landscape wallpaper and a portrait Cov
 
 - Remote-first home screen: Left/Right browse, OK opens, Up opens the app library.
 - Portrait translucent cards with app icons, a custom wallpaper, and a small clock.
+- Bundled scenic wallpapers rotate sequentially every 30 minutes while Home is visible.
 - App library split into ordered Home apps and a multi-column list of other apps. OK opens any app; hold OK to add, remove, or reorder Home apps.
 - Import one private wallpaper from the system picker or share sheet; the image is normalized and capped at 512 KiB.
 - Small bounded artwork and icon caches; no image blur loop, network wallpaper, or system-partition changes.

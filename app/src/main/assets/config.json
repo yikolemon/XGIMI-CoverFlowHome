@@ -26,6 +26,8 @@
   "show_inputs_button": false,
   "background_color": "#080E1C",
   "wallpaper": true,
+  "wallpaper_rotation_minutes": 30,
+  "wallpaper_order": "sequential",
   "wallpaper_dim": 25,
   "wallpaper_true_color": false,
   "ambient_glow": false,
