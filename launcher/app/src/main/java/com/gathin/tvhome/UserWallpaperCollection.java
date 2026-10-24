@@ -36,12 +36,14 @@ final class UserWallpaperCollection {
         boolean installed = false;
         try {
             long total = 0;
+            byte[] buffer = new byte[8192];
             for (int i = 0; i < sources.size(); i++) {
+                if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted())
+                    throw new IOException("Cancelled");
                 File output = new File(directory, String.format(java.util.Locale.ROOT, "wallpaper-%03d.jpg", i + 1));
                 try (InputStream input = context.getContentResolver().openInputStream(sources.get(i));
                      FileOutputStream stream = new FileOutputStream(output)) {
                     if (input == null) throw new IOException("Cannot open image");
-                    byte[] buffer = new byte[8192];
                     long size = 0;
                     int count;
                     while ((count = input.read(buffer)) != -1) {

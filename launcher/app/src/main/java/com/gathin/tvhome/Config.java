@@ -361,8 +361,9 @@ final class Config {
             wallpaperTrueColor = false;
             rotationMinutes = 0;
         }
-        List<File> importedWallpapers = UserWallpaperCollection.images(ctx);
-        if (UserWallpaperCollection.enabled(ctx) && !importedWallpapers.isEmpty()) {
+        List<File> importedWallpapers = UserWallpaperCollection.enabled(ctx)
+                ? UserWallpaperCollection.images(ctx) : Collections.emptyList();
+        if (!importedWallpapers.isEmpty()) {
             wallpaper = importedWallpapers.get(0);
             wallpapers.clear();
             wallpapers.addAll(importedWallpapers);

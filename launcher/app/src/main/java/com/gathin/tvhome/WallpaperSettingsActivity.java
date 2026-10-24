@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.BitmapFactory;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -72,6 +73,8 @@ public final class WallpaperSettingsActivity extends Activity {
         rotation.setText(R.string.local_wallpaper_rotation);
         rotation.setTextColor(Color.WHITE);
         rotation.setTextSize(17);
+        styleChoice(rotation, false);
+        rotation.setOnFocusChangeListener((view, focused) -> styleChoice(rotation, focused));
         rotation.setChecked(getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE)
                 .getBoolean(Config.WALLPAPER_ROTATION_ENABLED_KEY, true));
         rotation.setOnCheckedChangeListener((button, checked) -> {
@@ -117,14 +120,23 @@ public final class WallpaperSettingsActivity extends Activity {
     private TextView button(LinearLayout panel, int label, Runnable click) {
         TextView view = text(getString(label), 17);
         view.setFocusable(true);
-        view.setBackgroundResource(R.drawable.glass_panel);
-        view.setOnFocusChangeListener((v, focus) -> view.setTextColor(focus ? Color.WHITE : 0xAAFFFFFF));
+        styleChoice(view, false);
+        view.setOnFocusChangeListener((v, focus) -> styleChoice(view, focus));
         view.setOnClickListener(v -> { if (!busy) click.run(); });
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(440), dp(54));
         params.gravity = Gravity.CENTER_HORIZONTAL;
         params.topMargin = dp(12);
         panel.addView(view, params);
         return view;
+    }
+
+    private void styleChoice(TextView view, boolean focused) {
+        GradientDrawable background = new GradientDrawable();
+        background.setCornerRadius(dp(14));
+        background.setColor(focused ? 0x3AFFFFFF : 0x14FFFFFF);
+        background.setStroke(dp(focused ? 2 : 1), focused ? 0xEEFFFFFF : 0x35FFFFFF);
+        view.setBackground(background);
+        view.setTextColor(focused ? Color.WHITE : 0xAAFFFFFF);
     }
 
     private void pick() {
@@ -241,6 +253,10 @@ public final class WallpaperSettingsActivity extends Activity {
                     browser = new AlertDialog.Builder(this).setTitle(current.getPath())
                             .setItems(labels.toArray(new String[0]), (dialog, index) -> {
                                 if (collectionMode && index == 0) {
+                                    if (limited) {
+                                        Toast.makeText(this, R.string.local_wallpaper_limited, Toast.LENGTH_LONG).show();
+                                        return;
+                                    }
                                     List<Uri> images = new ArrayList<>();
                                     for (File item : entries) if (item.isFile() && imageName(item.getName())) images.add(Uri.fromFile(item));
                                     importCollection(images);

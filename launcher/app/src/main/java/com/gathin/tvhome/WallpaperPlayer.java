@@ -34,7 +34,7 @@ final class WallpaperPlayer {
         @Override public void run() {
             if (!active || closed) return;
             update();
-            handler.postDelayed(this, 60_000L);
+            scheduleRotation();
         }
     };
     private final ExecutorService decoder = Executors.newSingleThreadExecutor();
@@ -113,8 +113,17 @@ final class WallpaperPlayer {
     void start() {
         active = true;
         update();
+        scheduleRotation();
+    }
+
+    private void scheduleRotation() {
         handler.removeCallbacks(rotationTick);
-        handler.postDelayed(rotationTick, 60_000L);
+        if (!active || closed || interval <= 0 || files.size() < 2
+                || !settings.getBoolean(Config.WALLPAPER_ROTATION_ENABLED_KEY, true)) return;
+        long elapsed = System.currentTimeMillis() - preferences.getLong("changed", 0);
+        // While a decode is pending, do not enqueue a tight loop for an overdue picture.
+        long delay = elapsed < 0 ? interval : Math.max(1000L, interval - elapsed);
+        handler.postDelayed(rotationTick, delay);
     }
 
     void stop() {
@@ -172,6 +181,7 @@ final class WallpaperPlayer {
                     preferences.edit().putString("image", displayed)
                             .putLong("changed", System.currentTimeMillis()).apply();
                 }
+                scheduleRotation();
             });
         });
     }
