@@ -12,6 +12,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.database.Cursor;
+import android.provider.DocumentsContract;
 import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.Switch;
@@ -32,11 +34,11 @@ import java.util.concurrent.Executors;
 
 /** Text-only remote-friendly picker; no thumbnails, catalogue decoder or storage-management permission. */
 public final class WallpaperSettingsActivity extends Activity {
-    private static final int PICK = 1, STORAGE = 2;
+    private static final int PICK = 1, STORAGE = 2, PICK_FOLDER = 3, FOLDER_STORAGE = 4;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private volatile boolean closed;
     private boolean busy;
-    private TextView status, choose, theme;
+    private TextView status, choose, folderChoice, theme;
     private Switch rotation;
     private AlertDialog browser;
 
@@ -51,7 +53,9 @@ public final class WallpaperSettingsActivity extends Activity {
         TextView title = text(getString(R.string.local_wallpaper_title), 26);
         panel.addView(title, new LinearLayout.LayoutParams(-1, dp(56)));
         String current = getString(R.string.local_wallpaper_default);
-        if (UserWallpaper.enabled(this)) {
+        if (UserWallpaperCollection.enabled(this)) {
+            current = getString(R.string.local_wallpaper_collection, UserWallpaperCollection.images(this).size());
+        } else if (UserWallpaper.enabled(this)) {
             BitmapFactory.Options bounds = new BitmapFactory.Options();
             bounds.inJustDecodeBounds = true;
             File image = UserWallpaper.file(this);
@@ -63,6 +67,7 @@ public final class WallpaperSettingsActivity extends Activity {
         status.setTextColor(0xBBFFFFFF);
         panel.addView(status, new LinearLayout.LayoutParams(-1, dp(50)));
         choose = button(panel, R.string.local_wallpaper_choose, this::pick);
+        folderChoice = button(panel, R.string.local_wallpaper_folder, this::pickFolder);
         rotation = new Switch(this);
         rotation.setText(R.string.local_wallpaper_rotation);
         rotation.setTextColor(Color.WHITE);
@@ -135,11 +140,24 @@ public final class WallpaperSettingsActivity extends Activity {
         } else browse(Environment.getExternalStorageDirectory());
     }
 
+    private void pickFolder() {
+        try {
+            startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), PICK_FOLDER);
+        } catch (ActivityNotFoundException | SecurityException unavailable) {
+            if (Build.VERSION.SDK_INT >= 33) {
+                Toast.makeText(this, R.string.local_wallpaper_no_picker, Toast.LENGTH_LONG).show();
+            } else if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, FOLDER_STORAGE);
+            } else browse(Environment.getExternalStorageDirectory(), true);
+        }
+    }
+
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
-        if (request != STORAGE) return;
+        if (request != STORAGE && request != FOLDER_STORAGE) return;
         if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED)
-            browse(Environment.getExternalStorageDirectory());
+            browse(Environment.getExternalStorageDirectory(), request == FOLDER_STORAGE);
         else Toast.makeText(this, R.string.local_wallpaper_permission, Toast.LENGTH_LONG).show();
     }
 
@@ -147,11 +165,15 @@ public final class WallpaperSettingsActivity extends Activity {
         super.onActivityResult(request, result, data);
         if (request == PICK && result == RESULT_OK && data != null && data.getData() != null)
             importImage(data.getData());
+        if (request == PICK_FOLDER && result == RESULT_OK && data != null && data.getData() != null)
+            importFolder(data.getData());
     }
 
     private void busy(boolean value) {
         busy = value;
         choose.setEnabled(!value);
+        folderChoice.setEnabled(!value);
+        rotation.setEnabled(!value);
         theme.setEnabled(!value);
         status.setText(value ? R.string.local_wallpaper_working : R.string.local_wallpaper_failed);
     }
@@ -176,6 +198,10 @@ public final class WallpaperSettingsActivity extends Activity {
     }
 
     private void browse(File folder) {
+        browse(folder, false);
+    }
+
+    private void browse(File folder, boolean collectionMode) {
         busy(true);
         worker.execute(() -> {
             List<File> entries = new ArrayList<>();
@@ -200,6 +226,7 @@ public final class WallpaperSettingsActivity extends Activity {
                         .thenComparing(File::getName, String.CASE_INSENSITIVE_ORDER));
                 boolean parent = !current.equals(root);
                 List<String> labels = new ArrayList<>();
+                if (collectionMode) labels.add(getString(R.string.local_wallpaper_use_folder));
                 if (parent) labels.add(getString(R.string.local_wallpaper_parent));
                 for (File item : entries) labels.add((item.isDirectory() ? "▸ " : "") + item.getName());
                 final boolean limited = truncated;
@@ -207,14 +234,21 @@ public final class WallpaperSettingsActivity extends Activity {
                     if (closed) return;
                     busy = false;
                     choose.setEnabled(true);
+                    folderChoice.setEnabled(true);
+                    rotation.setEnabled(true);
                     theme.setEnabled(true);
                     status.setText(R.string.local_wallpaper_browse_hint);
                     browser = new AlertDialog.Builder(this).setTitle(current.getPath())
                             .setItems(labels.toArray(new String[0]), (dialog, index) -> {
-                                if (parent && index == 0) browse(current.getParentFile());
+                                if (collectionMode && index == 0) {
+                                    List<Uri> images = new ArrayList<>();
+                                    for (File item : entries) if (item.isFile() && imageName(item.getName())) images.add(Uri.fromFile(item));
+                                    importCollection(images);
+                                }
+                                else if (parent && index == (collectionMode ? 1 : 0)) browse(current.getParentFile(), collectionMode);
                                 else {
-                                    File selected = entries.get(index - (parent ? 1 : 0));
-                                    if (selected.isDirectory()) browse(selected);
+                                    File selected = entries.get(index - (parent ? 1 : 0) - (collectionMode ? 1 : 0));
+                                    if (selected.isDirectory()) browse(selected, collectionMode);
                                     else importImage(Uri.fromFile(selected));
                                 }
                             }).setNegativeButton(android.R.string.cancel, null).create();
@@ -225,6 +259,59 @@ public final class WallpaperSettingsActivity extends Activity {
                 runOnUiThread(() -> { if (!closed) busy(false); });
             }
         });
+    }
+
+    private void importFolder(Uri tree) {
+        if (busy) return;
+        busy(true);
+        worker.execute(() -> {
+            List<Uri> images = new ArrayList<>();
+            boolean success = false;
+            try {
+                Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree,
+                        DocumentsContract.getTreeDocumentId(tree));
+                String[] projection = {DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                        DocumentsContract.Document.COLUMN_DISPLAY_NAME};
+                try (Cursor cursor = getContentResolver().query(children, projection, null, null, null)) {
+                    if (cursor == null) throw new IOException("Cannot list folder");
+                    java.util.Map<String, Uri> sorted = new java.util.TreeMap<>();
+                    int scanned = 0;
+                    while (cursor.moveToNext()) {
+                        if (++scanned > 1000 || closed) throw new IOException("Folder too large or cancelled");
+                        String name = cursor.getString(1);
+                        if (name != null && imageName(name)) sorted.put(name,
+                                DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(0)));
+                    }
+                    images.addAll(sorted.values());
+                }
+                UserWallpaperCollection.importImages(this, images, () -> closed);
+                success = true;
+            } catch (IOException | RuntimeException failure) { /* Existing selection remains intact. */ }
+            final boolean imported = success;
+            runOnUiThread(() -> finishCollection(imported));
+        });
+    }
+
+    private void importCollection(List<Uri> images) {
+        if (busy) return;
+        busy(true);
+        worker.execute(() -> {
+            boolean success = false;
+            try {
+                UserWallpaperCollection.importImages(this, images, () -> closed);
+                success = true;
+            } catch (IOException | RuntimeException failure) { /* Existing selection remains intact. */ }
+            final boolean imported = success;
+            runOnUiThread(() -> finishCollection(imported));
+        });
+    }
+
+    private void finishCollection(boolean success) {
+        if (closed) return;
+        if (!success) { busy(false); return; }
+        Toast.makeText(this, R.string.wallpaper_applied, Toast.LENGTH_SHORT).show();
+        setResult(RESULT_OK);
+        finish();
     }
 
     private static boolean imageName(String name) {

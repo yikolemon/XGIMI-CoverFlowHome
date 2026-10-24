@@ -14,3 +14,7 @@ backup/
 *.aab
 launcher/hs_err_pid*.log
 launcher/replay_pid*.log
+
+# Personal wallpaper originals and device-specific collection stay local.
+/wallpaper/
+/themes/xgimi-personal/wallpapers/

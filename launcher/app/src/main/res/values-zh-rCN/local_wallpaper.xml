@@ -5,6 +5,9 @@
     <string name="local_wallpaper_default">当前使用：主题壁纸</string>
     <string name="local_wallpaper_custom_details">自选图片 · %1$d×%2$d · %3$d KiB</string>
     <string name="local_wallpaper_choose">选择本地图片</string>
+    <string name="local_wallpaper_folder">选择壁纸文件夹</string>
+    <string name="local_wallpaper_collection">自选文件夹 · %1$d 张图片</string>
+    <string name="local_wallpaper_use_folder">使用此文件夹中的全部图片</string>
     <string name="local_wallpaper_rotation">每 30 分钟自动更换壁纸</string>
     <string name="local_wallpaper_restore">恢复主题壁纸</string>
     <string name="local_wallpaper_hint">自动居中裁剪为 16:9，最大 1080p；只保存一张压缩图片，不复制原图，不缓存缩略图。</string>

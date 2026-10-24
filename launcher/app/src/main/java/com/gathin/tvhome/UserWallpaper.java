@@ -33,11 +33,16 @@ final class UserWallpaper {
     }
 
     static long revision(Context context) {
+        if (UserWallpaperCollection.enabled(context)) {
+            java.util.List<File> images = UserWallpaperCollection.images(context);
+            if (!images.isEmpty()) return images.get(0).getAbsolutePath().hashCode();
+        }
         File image = file(context);
         return enabled(context) ? image.lastModified() ^ image.length() : 0;
     }
 
     static void useTheme(Context context) {
+        UserWallpaperCollection.disable(context);
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("enabled", false).apply();
         context.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE).edit()
                 .remove(Config.WALLPAPER_CHOICE_KEY).apply();
@@ -133,6 +138,7 @@ final class UserWallpaper {
                 throw failure;
             }
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("enabled", true).apply();
+            UserWallpaperCollection.disable(context);
         } catch (IllegalArgumentException | OutOfMemoryError failure) {
             throw new IOException("Image cannot be imported safely", failure);
         } finally {

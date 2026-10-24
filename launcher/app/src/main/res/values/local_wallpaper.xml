@@ -5,6 +5,9 @@
     <string name="local_wallpaper_default">Using theme wallpaper</string>
     <string name="local_wallpaper_custom_details">Your picture · %1$d×%2$d · %3$d KiB</string>
     <string name="local_wallpaper_choose">Choose a local picture</string>
+    <string name="local_wallpaper_folder">Choose wallpaper folder</string>
+    <string name="local_wallpaper_collection">Imported folder · %1$d images</string>
+    <string name="local_wallpaper_use_folder">Use all pictures in this folder</string>
     <string name="local_wallpaper_rotation">Rotate theme wallpapers every 30 minutes</string>
     <string name="local_wallpaper_restore">Restore theme wallpaper</string>
     <string name="local_wallpaper_hint">Pictures are centre-cropped to 16:9, reduced to at most 1080p and saved privately. Only one picture is kept; no original copy or thumbnail cache.</string>

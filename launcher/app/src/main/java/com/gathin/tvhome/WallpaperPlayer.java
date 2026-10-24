@@ -28,11 +28,12 @@ final class WallpaperPlayer {
     private final long interval;
     private final String order;
     private final SharedPreferences preferences;
+    private final SharedPreferences settings;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable rotationTick = new Runnable() {
         @Override public void run() {
             if (!active || closed) return;
-            if (preferences.getBoolean(Config.WALLPAPER_ROTATION_ENABLED_KEY, true)) update();
+            update();
             handler.postDelayed(this, 60_000L);
         }
     };
@@ -55,6 +56,7 @@ final class WallpaperPlayer {
         bitmapConfig = config.wallpaperTrueColor ? Bitmap.Config.ARGB_8888 : Bitmap.Config.RGB_565;
         order = config.wallpaperOrder;
         preferences = context.getSharedPreferences("wallpaper_rotation", Context.MODE_PRIVATE);
+        settings = context.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE);
         // Playback state belongs to one collection. Changing the collection starts from its first
         // picture instead of resuming a filename that belonged to the previous one.
         String collection = collectionKey(files);
@@ -142,7 +144,8 @@ final class WallpaperPlayer {
         String previous = preferences.getString("image", "");
         File selected = WallpaperRotation.find(files, previous);
         long changed = preferences.getLong("changed", 0);
-        if (selected == null || WallpaperRotation.due(changed, System.currentTimeMillis(), interval)) {
+        if (selected == null || settings.getBoolean(Config.WALLPAPER_ROTATION_ENABLED_KEY, true)
+                && WallpaperRotation.due(changed, System.currentTimeMillis(), interval)) {
             selected = WallpaperRotation.pick(files, previous, order, random);
         }
         if (selected == null || selected.getName().equals(displayed)) return;

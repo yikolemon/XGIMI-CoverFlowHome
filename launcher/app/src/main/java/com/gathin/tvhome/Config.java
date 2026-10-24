@@ -361,6 +361,15 @@ final class Config {
             wallpaperTrueColor = false;
             rotationMinutes = 0;
         }
+        List<File> importedWallpapers = UserWallpaperCollection.images(ctx);
+        if (UserWallpaperCollection.enabled(ctx) && !importedWallpapers.isEmpty()) {
+            wallpaper = importedWallpapers.get(0);
+            wallpapers.clear();
+            wallpapers.addAll(importedWallpapers);
+            wallpaperEnabled = true;
+            wallpaperTrueColor = false;
+            rotationMinutes = 30;
+        }
         // A festive skin comes only from a theme; config.xml has no festival.
         Festival festival = json == null ? Festival.NONE : Festival.parse(string(json, "festival", ""),
                 string(json, "festival_until", ""), string(json, "greeting", ""), string(json, "accent_color", ""));
