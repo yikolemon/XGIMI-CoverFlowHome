@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="local_wallpaper_title">更换壁纸</string>
+    <string name="local_wallpaper_custom">当前使用：自选图片</string>
+    <string name="local_wallpaper_default">当前使用：主题壁纸</string>
+    <string name="local_wallpaper_custom_details">自选图片 · %1$d×%2$d · %3$d KiB</string>
+    <string name="local_wallpaper_choose">选择本地图片</string>
+    <string name="local_wallpaper_restore">恢复主题壁纸</string>
+    <string name="local_wallpaper_hint">自动居中裁剪为 16:9，最大 1080p；只保存一张压缩图片，不复制原图，不缓存缩略图。</string>
+    <string name="local_wallpaper_import_confirm">将这张图片导入为壁纸？</string>
+    <string name="local_wallpaper_no_picker">系统没有图片选择器，可从文件管理器分享图片到本桌面。</string>
+    <string name="local_wallpaper_permission">需要允许读取图片存储，才能浏览本地图片。</string>
+    <string name="local_wallpaper_working">正在处理，请稍候；按返回可取消。</string>
+    <string name="local_wallpaper_failed">无法读取或处理图片，当前壁纸保持不变。</string>
+    <string name="local_wallpaper_browse_hint">选择文件夹或图片，不加载缩略图。</string>
+    <string name="local_wallpaper_parent">↑ 返回上级目录</string>
+    <string name="local_wallpaper_limited">最多显示 200 项、检查 1000 个目录项，请使用文件较少的文件夹。</string>
+</resources>

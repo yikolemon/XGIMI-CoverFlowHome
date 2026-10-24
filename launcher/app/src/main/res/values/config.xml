@@ -126,6 +126,11 @@
     <!-- The Wi-Fi/Ethernet pill in the top bar. false hides it (on Android 14 with Location off it can
          only say "Wi-Fi", not the network name). Can also be set with "show_network_pill" in a theme. -->
     <bool name="show_network_pill">true</bool>
+    <!-- Hide the Settings button in custom themes without changing system settings access. -->
+    <bool name="show_settings_button">true</bool>
+    <bool name="show_inputs_button">true</bool>
+    <!-- Opt-in portrait carousel. The classic dock/grid remains the default. -->
+    <bool name="cover_flow">false</bool>
     <!-- Names under every tile, not only the focused one: unfocused names stay dimmed, the focused one is full white.
          With dock_row the band grows down to hold the dock's names too. -->
     <bool name="always_show_names">false</bool>

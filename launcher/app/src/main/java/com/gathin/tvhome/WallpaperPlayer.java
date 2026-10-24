@@ -36,6 +36,7 @@ final class WallpaperPlayer {
     private boolean closed;
     private boolean loading;
     private String displayed = "";
+    private Runnable imageChanged;
 
     WallpaperPlayer(Context context, FrameLayout root, Config config) {
         this.root = root;
@@ -106,9 +107,19 @@ final class WallpaperPlayer {
         active = false;
     }
 
+    void setOnImageChanged(Runnable listener) { imageChanged = listener; }
+
+    /** Release the full-screen decoded image when a hidden launcher is under memory pressure. */
+    void trim() {
+        if (active || closed) return;
+        image.setImageDrawable(null);
+        displayed = "";
+    }
+
     void close() {
         active = false;
         closed = true;
+        imageChanged = null;
         decoder.shutdownNow();
     }
 
@@ -138,6 +149,7 @@ final class WallpaperPlayer {
                     return;
                 }
                 image.setImageBitmap(bitmap);
+                if (imageChanged != null) imageChanged.run();
                 displayed = next.getName();
                 if (!displayed.equals(previous) || changed == 0) {
                     preferences.edit().putString("image", displayed)

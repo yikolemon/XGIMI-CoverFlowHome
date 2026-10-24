@@ -39,12 +39,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
+import java.util.function.BiConsumer;
 
 /** On-demand installed-app picker. Uses the launcher's glass resources; no backdrop capture or blur. */
 final class AppLibraryDialog {
     private final Activity activity;
     private final Predicate<String> onHome;
     private final Runnable changed;
+    private final BiConsumer<String, Integer> moveHome;
     private final LinearLayout panel;
     private final boolean reducedMotion;
     private final boolean animations;
@@ -71,7 +73,11 @@ final class AppLibraryDialog {
 
     private void stopHighlight() {
         if (spring != null) spring.cancel();
-        if (catalog != null) catalog.stopScroll();
+        if (catalog != null) {
+            catalog.stopScroll();
+            catalog.setAdapter(null);
+            catalog.getRecycledViewPool().clear();
+        }
         catalog = null;
         highlightShown = false;
     }
@@ -109,7 +115,13 @@ final class AppLibraryDialog {
     }
 
     AppLibraryDialog(Activity activity, boolean animations, boolean reducedMotion, Predicate<String> onHome, Runnable changed, Runnable dismissed) {
+        this(activity, animations, reducedMotion, onHome, changed, dismissed, null);
+    }
+
+    AppLibraryDialog(Activity activity, boolean animations, boolean reducedMotion, Predicate<String> onHome,
+                     Runnable changed, Runnable dismissed, BiConsumer<String, Integer> moveHome) {
         this.activity = activity;
+        this.moveHome = moveHome;
         this.animations = animations;
         this.rtl = activity.getResources().getBoolean(R.bool.rtl_app_grid);
         this.reducedMotion = reducedMotion;
@@ -227,7 +239,7 @@ final class AppLibraryDialog {
         count.setSingleLine(true);
         header.addView(count, new LinearLayout.LayoutParams(-2, -2));
         panel.addView(header, new LinearLayout.LayoutParams(-1, dp(44)));
-        instructions = text(activity.getString(R.string.library_hint_add), 13, 0xBBFFFFFF);
+        instructions = text(activity.getString(R.string.home_library_other_hint), 13, 0xBBFFFFFF);
         instructions.setSingleLine(true);
         instructions.setEllipsize(TextUtils.TruncateAt.END);
         instructions.setPadding(dp(12), 0, dp(12), dp(6));
@@ -251,6 +263,8 @@ final class AppLibraryDialog {
             @Override protected boolean isLayoutRTL() { return rtl; }
         });
         list.setItemAnimator(null);
+        list.setItemViewCacheSize(0);
+        list.getLayoutManager().setItemPrefetchEnabled(false);
         list.setOverScrollMode(View.OVER_SCROLL_NEVER);
         list.setClipToPadding(false);
         list.setPadding(dp(10), dp(8), dp(10), dp(8));
@@ -368,7 +382,19 @@ final class AppLibraryDialog {
         addAction(rows, R.string.library_open, () -> open(app));
         boolean home = onHome.test(pkg);
         addAction(rows, home ? R.string.library_remove_shortcut : R.string.library_add_home,
-                () -> changeHome(app, !home));
+                 () -> changeHome(app, !home));
+        if (home && moveHome != null) {
+            addAction(rows, R.string.cover_flow_move_left, () -> {
+                moveHome.accept(pkg, -1);
+                dismissActions();
+                refresh();
+            });
+            addAction(rows, R.string.cover_flow_move_right, () -> {
+                moveHome.accept(pkg, 1);
+                dismissActions();
+                refresh();
+            });
+        }
         addAction(rows, R.string.library_app_info, () -> {
             close();
             try {
@@ -482,7 +508,7 @@ final class AppLibraryDialog {
             TextView status = holder.itemView.findViewById(R.id.status);
             boolean home = onHome.test(pkg);
             boolean recent = LibraryApps.recent(installTimes.getOrDefault(pkg, 0L), catalogTime);
-            status.setText(home ? R.string.library_on_home : recent ? R.string.library_recent : R.string.library_add_home);
+            status.setText(home ? R.string.library_on_home : recent ? R.string.library_recent : R.string.home_library_other_detail);
             status.setVisibility(View.VISIBLE);
             holder.itemView.setBackground(surface(home ? 0x1475BBA4 : 0x0CFFFFFF, 18));
             View check = holder.itemView.findViewById(R.id.dot);
@@ -491,16 +517,14 @@ final class AppLibraryDialog {
             if (home) check.setBackgroundResource(R.drawable.library_check);
             else check.setBackground(surface(0xFF70D9A0, 8));
             check.setVisibility(home || recent ? View.VISIBLE : View.GONE);
-            holder.itemView.setOnClickListener(v -> {
-                if (onHome.test(pkg)) open(app);
-                else changeHome(app, true);
-            });
+            holder.itemView.setOnClickListener(v -> open(app));
             holder.itemView.setOnLongClickListener(v -> { showActions(app, v); return true; });
             holder.itemView.setOnFocusChangeListener((v, focused) -> {
                 if (focused) {
                     selectedPackage = pkg;
                     instructions.setText(onHome.test(pkg)
-                            ? R.string.library_hint_open : R.string.library_hint_add);
+                            ? moveHome == null ? R.string.library_hint_open : R.string.cover_flow_library_hint
+                            : R.string.home_library_other_hint);
                     v.post(() -> { if (v.hasFocus() && catalog != null) highlight(v, true); });
                     int index = holder.getBindingAdapterPosition();
                     if (index != RecyclerView.NO_POSITION) selectedPosition = index;

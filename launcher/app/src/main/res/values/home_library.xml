@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_library_home">Home apps · %1$d · in Home order</string>
+    <string name="home_library_others">Other apps · %1$d</string>
+    <string name="home_library_hint">OK opens any app · Hold OK: sort/remove Home apps, or add other apps to Home</string>
+    <string name="home_library_other_detail">Hold OK to add to Home</string>
+    <string name="home_library_other_hint">OK to open · Hold OK to add to Home</string>
+    <string name="home_library_empty">No Home apps yet. Add one from below.</string>
+    <string name="home_library_all_added">All launchable apps are already on Home.</string>
+    <string name="home_library_sort">Reorder Home apps</string>
+    <string name="home_library_sort_hint">← → Move · OK Save · Back Cancel · Changes are written only when saved</string>
+    <string name="home_library_moving">← Moving →</string>
+</resources>

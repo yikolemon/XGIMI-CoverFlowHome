@@ -77,6 +77,12 @@ final class Config {
     final boolean reorderButton;
     /** Show the Wi-Fi/Ethernet pill in the top bar (config.xml, show_network_pill). */
     final boolean showNetworkPill;
+    /** Show the Settings button in the top bar; defaults to true. */
+    final boolean showSettingsButton;
+    /** Show the Inputs button when input sources are available. */
+    final boolean showInputsButton;
+    /** Portrait, horizontal-only cover flow instead of the classic dock and grid. */
+    final boolean coverFlow;
     /** Wi-Fi and Settings pills as round icon buttons, Inputs keeps its label (config.xml icon_only_buttons). */
     final boolean iconOnlyButtons;
     /** App library as a round button in the top bar (config.xml library_button); needs app_library. */
@@ -138,7 +144,8 @@ final class Config {
                    int[] settingsKeycodes, boolean settingsKeyPanel, boolean wallpaperEnabled, File wallpaper, List<File> wallpapers,
                    int wallpaperRotationMinutes, int wallpaperDim, String wallpaperOrder, boolean overlayApplied,
                    Festival festival, int[] inputKeycodes, List<String> appKeys,
-                   List<RaceWeekend.Race> raceCalendar, boolean cinematicHome, boolean ambientGlow, int homeIdleClockMinutes) {
+                   List<RaceWeekend.Race> raceCalendar, boolean cinematicHome, boolean ambientGlow, int homeIdleClockMinutes,
+                   boolean showSettingsButton, boolean showInputsButton, boolean coverFlow) {
         this.inputKeycodes = inputKeycodes;
         this.appKeys = Collections.unmodifiableList(appKeys);
         this.dockApps = Collections.unmodifiableList(dockApps);
@@ -164,6 +171,9 @@ final class Config {
         this.dockRow = dockRow;
         this.reorderButton = reorderButton;
         this.showNetworkPill = showNetworkPill;
+        this.showSettingsButton = showSettingsButton;
+        this.showInputsButton = showInputsButton;
+        this.coverFlow = coverFlow;
         this.iconOnlyButtons = iconOnlyButtons;
         this.libraryButton = libraryButton;
         this.wifiLabelWidth = wifiLabelWidth;
@@ -221,6 +231,9 @@ final class Config {
         boolean dockRow = res.getBoolean(R.bool.dock_row);
         boolean reorderButton = res.getBoolean(R.bool.reorder_button);
         boolean showNetworkPill = res.getBoolean(R.bool.show_network_pill);
+        boolean showSettingsButton = res.getBoolean(R.bool.show_settings_button);
+        boolean showInputsButton = res.getBoolean(R.bool.show_inputs_button);
+        boolean coverFlow = res.getBoolean(R.bool.cover_flow);
         boolean iconOnlyButtons = res.getBoolean(R.bool.icon_only_buttons);
         boolean libraryButton = res.getBoolean(R.bool.library_button);
         int wifiLabelWidth = res.getInteger(R.integer.wifi_label_width);
@@ -270,6 +283,9 @@ final class Config {
             dockRow = bool(json, "dock_row", dockRow);
             reorderButton = bool(json, "reorder_button", reorderButton);
             showNetworkPill = bool(json, "show_network_pill", showNetworkPill);
+            showSettingsButton = bool(json, "show_settings_button", showSettingsButton);
+            showInputsButton = bool(json, "show_inputs_button", showInputsButton);
+            coverFlow = bool(json, "cover_flow", coverFlow);
             iconOnlyButtons = bool(json, "icon_only_buttons", iconOnlyButtons);
             libraryButton = bool(json, "library_button", libraryButton);
             wifiLabelWidth = integer(json, "wifi_label_width", wifiLabelWidth, 0, 300);
@@ -335,6 +351,15 @@ final class Config {
                 wallpaperEnabled = true;
             }
         }
+        // A user import is private and independent of theme pushes. Keep only one static image.
+        if (UserWallpaper.enabled(ctx)) {
+            wallpaper = UserWallpaper.file(ctx);
+            wallpapers.clear();
+            wallpapers.add(wallpaper);
+            wallpaperEnabled = true;
+            wallpaperTrueColor = false;
+            rotationMinutes = 0;
+        }
         // A festive skin comes only from a theme; config.xml has no festival.
         Festival festival = json == null ? Festival.NONE : Festival.parse(string(json, "festival", ""),
                 string(json, "festival_until", ""), string(json, "greeting", ""), string(json, "accent_color", ""));
@@ -347,7 +372,7 @@ final class Config {
                 Math.max(0, Math.min(100, skyIntensity)), settingsKeycodes, settingsKeyPanel, wallpaperEnabled, wallpaper,
                 wallpapers, rotationMinutes, wallpaperDim, wallpaperOrder, applied,
                 festival, inputKeycodes, appKeys, json == null ? Collections.emptyList() : raceCalendar(json), cinematic, ambientGlow,
-                Math.max(0, idleClockMinutes));
+                Math.max(0, idleClockMinutes), showSettingsButton, showInputsButton, coverFlow);
     }
 
     /**

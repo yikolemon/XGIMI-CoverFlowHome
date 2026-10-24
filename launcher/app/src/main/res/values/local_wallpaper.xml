@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="local_wallpaper_title">Wallpaper</string>
+    <string name="local_wallpaper_custom">Using your imported picture</string>
+    <string name="local_wallpaper_default">Using theme wallpaper</string>
+    <string name="local_wallpaper_custom_details">Your picture · %1$d×%2$d · %3$d KiB</string>
+    <string name="local_wallpaper_choose">Choose a local picture</string>
+    <string name="local_wallpaper_restore">Restore theme wallpaper</string>
+    <string name="local_wallpaper_hint">Pictures are centre-cropped to 16:9, reduced to at most 1080p and saved privately. Only one picture is kept; no original copy or thumbnail cache.</string>
+    <string name="local_wallpaper_import_confirm">Import this picture as your wallpaper?</string>
+    <string name="local_wallpaper_no_picker">No system picker. Share a picture from a file manager to this wallpaper app.</string>
+    <string name="local_wallpaper_permission">Allow photo storage access to browse local pictures.</string>
+    <string name="local_wallpaper_working">Processing… You can press Back to cancel.</string>
+    <string name="local_wallpaper_failed">Could not read or process the picture. The current wallpaper is unchanged.</string>
+    <string name="local_wallpaper_browse_hint">Choose a folder or picture. No thumbnails are loaded.</string>
+    <string name="local_wallpaper_parent">↑ Parent folder</string>
+    <string name="local_wallpaper_limited">Only the first 200 entries / 1,000 directory items are examined. Use a smaller folder.</string>
+</resources>

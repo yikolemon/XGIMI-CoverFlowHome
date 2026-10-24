@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cover_flow_all_apps">全部应用</string>
+    <string name="cover_flow_instructions">← → 切换应用　 ·　 确定打开　 ·　 ↑ 全部应用</string>
+    <string name="cover_flow_empty">暂无常用应用，向上进入全部应用添加</string>
+    <string name="cover_flow_unavailable">暂时无法打开这个应用</string>
+    <string name="cover_flow_move_left">首页顺序：向左移动</string>
+    <string name="cover_flow_move_right">首页顺序：向右移动</string>
+    <string name="cover_flow_order_edge">这个方向已经到头了</string>
+    <string name="cover_flow_order_saved">顺序已保存，返回首页即可查看</string>
+    <string name="cover_flow_library_hint">确定打开 · 长按确定可排序或移出首页</string>
+</resources>

@@ -28,6 +28,7 @@ is ignored, and a file that doesn't parse is ignored as a whole, so a theme can 
 | Key | Type | Meaning |
 |---|---|---|
 | `dock_apps` | list of package names | The dock row, in order; missing apps are skipped |
+| `cover_flow` | bool | Opt-in portrait carousel (`false` by default). Uses `dock_apps` and library additions as favourites; Left/Right cycles, OK opens, Up focuses All apps. Replaces the grid, top controls and module cards; other classic-layout settings do not apply |
 | `fill_dock` | bool | Fill the dock slots `dock_apps` leaves free with the first grid apps (true by default); false leaves them empty |
 | `hidden_apps` | list of package names | Never shown as tiles |
 | `live_tv_package`, `live_tv_action` | string | The Live TV app and, if it has no leanback entry, the action to start it with |
@@ -42,6 +43,8 @@ is ignored, and a file that doesn't parse is ignored as a whole, so a theme can 
 | `dock_row` | bool | The dock as its own row with a band (`true`); `false` makes the dock apps the first tiles of one plain grid |
 | `reorder_button` | bool | A reorder button in the top bar (`false` by default); reordering is always in the Settings button's long-press menu |
 | `show_network_pill` | bool | The Wi-Fi/Ethernet pill in the top bar (`true` by default); `false` hides it |
+| `show_settings_button` | bool | Show the Settings button in the top bar (`true` by default). Hiding it also hides its long-press launcher menu; keep another way to open system settings |
+| `show_inputs_button` | bool | Show the Inputs button when sources are available (`true` by default); `false` hides it without disabling HDMI or AV |
 | `icon_only_buttons` | bool | Wi-Fi and Settings as round icon buttons; Inputs keeps its label (`false` by default) |
 | `wifi_label_width` | 0 to 300 | With `icon_only_buttons`, keep the network name on the Wi-Fi pill up to this width in dp, cut with an ellipsis; 0 leaves only the icon |
 | `library_button` | bool | The app library as a round button in the top bar, beside Settings; needs `app_library`. Closing the library returns to it |
