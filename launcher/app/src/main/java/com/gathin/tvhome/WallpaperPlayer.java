@@ -50,6 +50,10 @@ final class WallpaperPlayer {
     private Runnable imageChanged;
 
     WallpaperPlayer(Context context, FrameLayout root, Config config) {
+        this(context, root, config, false);
+    }
+
+    WallpaperPlayer(Context context, FrameLayout root, Config config, boolean asynchronousFirstImage) {
         this.root = root;
         files = new ArrayList<>(config.wallpapers);
         interval = config.wallpaperRotationMinutes * 60_000L;
@@ -81,7 +85,7 @@ final class WallpaperPlayer {
                 root.addView(shade, 1, new FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             }
-            showFirst();
+            if (!asynchronousFirstImage) showFirst();
         }
     }
 

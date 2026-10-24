@@ -65,6 +65,12 @@ final class CoverFlowView extends View {
     private final float[] distances = new float[7];
     private String counter = "";
     private long lastMoveTime;
+    private boolean loading;
+
+    void setLoading(boolean value) {
+        loading = value;
+        invalidate();
+    }
 
     CoverFlowView(Context context, boolean animations, Consumer<String> open, Runnable up) {
         super(context);
@@ -208,7 +214,7 @@ final class CoverFlowView extends View {
         float centerX = getWidth() / 2f;
         float centerY = getHeight() * 0.43f;
         if (apps.isEmpty()) {
-            text(canvas, getContext().getString(R.string.cover_flow_empty), centerX, centerY, 18, 0xCCFFFFFF);
+            if (!loading) text(canvas, getContext().getString(R.string.cover_flow_empty), centerX, centerY, 18, 0xCCFFFFFF);
             return;
         }
         int slots = apps.size() == 1 ? 1 : 7;

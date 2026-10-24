@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="home_loading">Loading apps…</string>
     <string name="cover_flow_all_apps">All apps</string>
     <string name="cover_flow_instructions">← → Browse   ·   OK Open   ·   ↑ All apps</string>
     <string name="cover_flow_empty">No favourites yet. Open All apps to add one.</string>

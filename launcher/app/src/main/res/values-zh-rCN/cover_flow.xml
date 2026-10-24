@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="home_loading">正在加载应用…</string>
     <string name="cover_flow_all_apps">全部应用</string>
     <string name="cover_flow_instructions">← → 切换应用　 ·　 确定打开　 ·　 ↑ 全部应用</string>
     <string name="cover_flow_empty">暂无常用应用，向上进入全部应用添加</string>

@@ -13,8 +13,6 @@ import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.net.Uri;
-import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.LruCache;
 import android.view.Gravity;
@@ -359,13 +357,6 @@ final class HomeLibraryDialog {
             action(menu, R.string.home_library_sort, () -> beginReorder(pkg));
             action(menu, R.string.library_remove_shortcut, () -> changeHome(pkg, false));
         } else action(menu, R.string.library_add_home, () -> changeHome(pkg, true));
-        action(menu, R.string.library_app_info, () -> {
-            close();
-            try { activity.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg))); }
-            catch (ActivityNotFoundException | SecurityException unavailable) {
-                Toast.makeText(activity, R.string.cover_flow_unavailable, Toast.LENGTH_SHORT).show();
-            }
-        });
         int[] location = new int[2], origin = new int[2];
         anchor.getLocationOnScreen(location);
         panel.getLocationOnScreen(origin);

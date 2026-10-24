@@ -44,13 +44,36 @@ final class CoverFlowHome {
     private HomeLibraryDialog library;
     private boolean registered;
     private boolean resumed;
+    private boolean appsDirty;
+    private final java.util.concurrent.ExecutorService appLoader = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private int loadGeneration;
+    private boolean closed;
+    private boolean resumeWorkPosted;
+    private final Runnable resumeWork = new Runnable() {
+        @Override public void run() {
+            resumeWorkPosted = false;
+            if (!resumed) return;
+            if (appsDirty) {
+                reload();
+                appsDirty = false;
+            }
+            carousel.restoreArtwork();
+            wallpaper.start();
+            updateFrost();
+        }
+    };
     private WeakReference<Bitmap> sampledWallpaper = new WeakReference<>(null);
     private final List<String> packages = new ArrayList<>();
     private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
-            if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return;
-            reload();
-            if (library != null) library.refresh();
+            if (Intent.ACTION_PACKAGE_REMOVED.equals(intent.getAction())
+                    && intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return;
+            appsDirty = true;
+            if (resumed) {
+                reload();
+                appsDirty = false;
+                if (library != null) library.refresh();
+            }
         }
     };
 
@@ -63,7 +86,7 @@ final class CoverFlowHome {
         root.setBackgroundColor(config.backgroundColor);
         activity.setContentView(root);
         activity.getWindow().setBackgroundDrawable(null);
-        wallpaper = new WallpaperPlayer(activity, root, config);
+        wallpaper = new WallpaperPlayer(activity, root, config, true);
 
         // A small clock leaves the wallpaper and posters as the primary content.
         LinearLayout clock = new LinearLayout(activity);
@@ -87,6 +110,7 @@ final class CoverFlowHome {
         root.addView(clock, clockParams);
 
         carousel = new CoverFlowView(activity, config.animations, this::launch, () -> libraryButtonFocus());
+        carousel.setLoading(true);
         carousel.setId(View.generateViewId());
         FrameLayout.LayoutParams flowParams = new FrameLayout.LayoutParams(-1, -1);
         flowParams.topMargin = dp(100);
@@ -131,7 +155,7 @@ final class CoverFlowHome {
         carousel.setNextFocusUpId(libraryButton.getId());
         libraryButton.setNextFocusDownId(carousel.getId());
         wallpaper.setOnImageChanged(this::updateFrost);
-        reload();
+        appsDirty = true;
         root.post(() -> {
             updateFrost();
             carousel.requestFocus();
@@ -167,6 +191,8 @@ final class CoverFlowHome {
 
     private void reload(boolean forceReload) {
         String previous = carousel.selectedPackage();
+        int generation = ++loadGeneration;
+        appLoader.execute(() -> {
         Set<String> wanted = new LinkedHashSet<>(config.dockApps);
         wanted.addAll(LibraryApps.load(activity));
         wanted.removeAll(LibraryApps.loadRemoved(activity));
@@ -174,8 +200,8 @@ final class CoverFlowHome {
         Order saved = Order.load(new File(activity.getFilesDir(), "cover_flow_order.txt"));
         List<String> ordered = CoverFlowOrder.arrange(new ArrayList<>(wanted),
                 saved == null ? Collections.emptyList() : saved.keys);
-        packages.clear();
         List<CoverFlowView.App> apps = new ArrayList<>();
+        List<String> loadedPackages = new ArrayList<>();
         PackageManager pm = activity.getPackageManager();
         for (String pkg : ordered) {
             if (pkg.equals(activity.getPackageName())) continue;
@@ -187,12 +213,19 @@ final class CoverFlowHome {
                 if (label == null) label = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
                 long updated = pm.getPackageInfo(pkg, 0).lastUpdateTime;
                 apps.add(new CoverFlowView.App(pkg, label, updated));
-                packages.add(pkg);
+                loadedPackages.add(pkg);
             } catch (PackageManager.NameNotFoundException | RuntimeException unavailable) {
                 // A concurrent uninstall or broken resource must not take the desktop down.
             }
         }
-        carousel.setApps(apps, previous, forceReload);
+        root.post(() -> {
+            if (closed || generation != loadGeneration) return;
+            packages.clear();
+            packages.addAll(loadedPackages);
+            carousel.setLoading(false);
+            carousel.setApps(apps, carousel.selectedPackage() != null ? carousel.selectedPackage() : previous, forceReload);
+        });
+        });
     }
 
     private void moveHome(String pkg, int direction) {
@@ -223,7 +256,7 @@ final class CoverFlowHome {
     }
 
     private void showLibrary() {
-        if (library != null) return;
+        if (library != null || closed) return;
         library = new HomeLibraryDialog(activity, () -> new ArrayList<>(packages),
                 this::saveHomeOrder, () -> reload(true), () -> {
                     library = null;
@@ -260,6 +293,7 @@ final class CoverFlowHome {
     }
 
     void start() {
+        if (registered) return;
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_PACKAGE_ADDED);
         filter.addAction(Intent.ACTION_PACKAGE_REMOVED);
@@ -276,23 +310,26 @@ final class CoverFlowHome {
             return;
         }
         resumed = true;
-        reload();
-        carousel.restoreArtwork();
-        wallpaper.start();
-        root.post(this::updateFrost);
         hideLibraryButton();
+        if (!resumeWorkPosted) {
+            resumeWorkPosted = true;
+            root.postOnAnimation(() -> {
+                if (resumeWorkPosted && resumed) root.post(resumeWork);
+            });
+        }
     }
 
     void pause() {
         resumed = false;
+        resumeWorkPosted = false;
+        root.removeCallbacks(resumeWork);
         wallpaper.stop();
         carousel.stopAnimation();
         if (library != null) library.close();
     }
 
     void stop() {
-        if (registered) activity.unregisterReceiver(packageReceiver);
-        registered = false;
+        // Keep observing package changes while another app is foreground, but defer work to resume.
     }
 
     void home() {
@@ -312,7 +349,11 @@ final class CoverFlowHome {
     }
 
     void close() {
-        stop();
+        closed = true;
+        loadGeneration++;
+        appLoader.shutdownNow();
+        if (registered) activity.unregisterReceiver(packageReceiver);
+        registered = false;
         wallpaper.close();
         carousel.release();
     }
