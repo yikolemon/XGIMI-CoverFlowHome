@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.view.Gravity;
 import android.widget.LinearLayout;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -36,6 +37,7 @@ public final class WallpaperSettingsActivity extends Activity {
     private volatile boolean closed;
     private boolean busy;
     private TextView status, choose, theme;
+    private Switch rotation;
     private AlertDialog browser;
 
     @Override protected void onCreate(Bundle state) {
@@ -61,6 +63,21 @@ public final class WallpaperSettingsActivity extends Activity {
         status.setTextColor(0xBBFFFFFF);
         panel.addView(status, new LinearLayout.LayoutParams(-1, dp(50)));
         choose = button(panel, R.string.local_wallpaper_choose, this::pick);
+        rotation = new Switch(this);
+        rotation.setText(R.string.local_wallpaper_rotation);
+        rotation.setTextColor(Color.WHITE);
+        rotation.setTextSize(17);
+        rotation.setChecked(getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE)
+                .getBoolean(Config.WALLPAPER_ROTATION_ENABLED_KEY, true));
+        rotation.setOnCheckedChangeListener((button, checked) -> {
+            getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).edit()
+                    .putBoolean(Config.WALLPAPER_ROTATION_ENABLED_KEY, checked).apply();
+            setResult(RESULT_OK);
+        });
+        LinearLayout.LayoutParams rotationParams = new LinearLayout.LayoutParams(dp(440), dp(54));
+        rotationParams.gravity = Gravity.CENTER_HORIZONTAL;
+        rotationParams.topMargin = dp(12);
+        panel.addView(rotation, rotationParams);
         theme = button(panel, R.string.local_wallpaper_restore, () -> {
             UserWallpaper.useTheme(this);
             setResult(RESULT_OK);

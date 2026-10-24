@@ -6,6 +6,8 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -26,6 +28,14 @@ final class WallpaperPlayer {
     private final long interval;
     private final String order;
     private final SharedPreferences preferences;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable rotationTick = new Runnable() {
+        @Override public void run() {
+            if (!active || closed) return;
+            if (preferences.getBoolean(Config.WALLPAPER_ROTATION_ENABLED_KEY, true)) update();
+            handler.postDelayed(this, 60_000L);
+        }
+    };
     private final ExecutorService decoder = Executors.newSingleThreadExecutor();
     private final Random random = new Random();
     private final int width;
@@ -101,10 +111,13 @@ final class WallpaperPlayer {
     void start() {
         active = true;
         update();
+        handler.removeCallbacks(rotationTick);
+        handler.postDelayed(rotationTick, 60_000L);
     }
 
     void stop() {
         active = false;
+        handler.removeCallbacks(rotationTick);
     }
 
     void setOnImageChanged(Runnable listener) { imageChanged = listener; }
@@ -121,6 +134,7 @@ final class WallpaperPlayer {
         closed = true;
         imageChanged = null;
         decoder.shutdownNow();
+        handler.removeCallbacks(rotationTick);
     }
 
     void update() {
