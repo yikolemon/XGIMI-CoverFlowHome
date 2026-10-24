@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">极米桌面</string>
+    <string name="date_format_home">M月d日 · EEEE</string>
+    <string name="app_library">应用库</string>
+    <plurals name="library_app_count"><item quantity="other">%d 个应用</item></plurals>
+    <string name="library_save_failed">无法保存更改。</string>
+    <string name="library_open">打开</string>
+    <string name="library_add_home">添加到首页</string>
+    <string name="library_remove_shortcut">从首页移除</string>
+    <string name="library_app_info">应用信息</string>
+    <string name="library_on_home">已在首页</string>
+    <string name="cover_flow_all_apps">全部应用</string>
+    <string name="cover_flow_instructions">左右切换 · 确定打开 · 上键进入应用库</string>
+    <string name="cover_flow_empty">首页暂无应用，请进入应用库添加。</string>
+    <string name="cover_flow_unavailable">无法打开此应用。</string>
+    <string name="cover_flow_move_left">首页顺序已到最左侧</string>
+    <string name="cover_flow_move_right">首页顺序已到最右侧</string>
+    <string name="cover_flow_order_edge">已到该方向的边界</string>
+    <string name="cover_flow_order_saved">首页顺序已保存。</string>
+    <string name="cover_flow_library_hint">确定打开 · 长按可排序或移除</string>
+    <string name="home_library_home">首页应用 · %1$d 个 · 按首页顺序</string>
+    <string name="home_library_others">其他应用 · %1$d 个</string>
+    <string name="home_library_hint">所有应用短按打开 · 长按首页应用可排序或移除，长按其他应用可添加</string>
+    <string name="home_library_other_detail">长按添加到首页</string>
+    <string name="home_library_other_hint">确定打开 · 长按添加到首页</string>
+    <string name="home_library_empty">首页还没有应用，可从下方添加。</string>
+    <string name="home_library_all_added">所有可启动应用均已添加到首页。</string>
+    <string name="home_library_sort">调整首页顺序</string>
+    <string name="home_library_sort_hint">← → 移动 · 确定保存 · 返回取消</string>
+    <string name="home_library_moving">← 正在移动 →</string>
+    <string name="local_wallpaper_title">壁纸</string>
+    <string name="local_wallpaper_custom">正在使用导入的图片</string>
+    <string name="local_wallpaper_default">正在使用主题壁纸</string>
+    <string name="local_wallpaper_custom_details">自选图片 · %1$d×%2$d · %3$d KiB</string>
+    <string name="local_wallpaper_choose">选择本地图片</string>
+    <string name="local_wallpaper_restore">恢复主题壁纸</string>
+    <string name="local_wallpaper_hint">图片会居中裁剪为 16:9，压缩至最高 1080p 后私有保存；只保留一张。</string>
+    <string name="local_wallpaper_import_confirm">要将此图片导入为壁纸吗？</string>
+    <string name="local_wallpaper_no_picker">系统没有图片选择器，请在文件管理器中分享图片到本桌面。</string>
+    <string name="local_wallpaper_permission">请允许访问图片以浏览本地文件。</string>
+    <string name="local_wallpaper_working">正在处理…可按返回取消。</string>
+    <string name="local_wallpaper_failed">无法处理图片，当前壁纸未更改。</string>
+    <string name="local_wallpaper_browse_hint">选择文件夹或图片，不加载缩略图。</string>
+    <string name="local_wallpaper_parent">↑ 上一级文件夹</string>
+    <string name="local_wallpaper_limited">最多检查 200 个条目或 1,000 个目录项。</string>
+    <string name="wallpaper_applied">壁纸已更新。</string>
+</resources>
