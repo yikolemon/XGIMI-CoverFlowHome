@@ -28,11 +28,11 @@ final class LibraryApps {
         return new AtomicFile(new File(context.getFilesDir(), removed ? "library_home_removed.txt" : "library_apps.txt"));
     }
 
-    static Set<String> load(Context context) {
+    static synchronized Set<String> load(Context context) {
         return read(store(context, false));
     }
 
-    static Set<String> loadRemoved(Context context) { return read(store(context, true)); }
+    static synchronized Set<String> loadRemoved(Context context) { return read(store(context, true)); }
 
     private static Set<String> read(AtomicFile file) {
         try { return readStrict(file); }
@@ -57,7 +57,8 @@ final class LibraryApps {
         }
     }
 
-    static boolean save(Context context, String pkg, boolean onHome) {
+    // AtomicFile protects against interrupted writes, not concurrent readers/writers.
+    static synchronized boolean save(Context context, String pkg, boolean onHome) {
         Set<String> additions, removed;
         try {
             additions = readStrict(store(context, false));

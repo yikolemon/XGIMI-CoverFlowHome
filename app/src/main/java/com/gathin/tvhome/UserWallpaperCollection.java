@@ -24,9 +24,13 @@ final class UserWallpaperCollection {
     }
 
     static List<File> images(Context context) {
+        return WallpaperRotation.images(directory(context));
+    }
+
+    static File directory(Context context) {
         String name = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("directory", "");
-        return WallpaperRotation.images(name.startsWith("collection-") && !name.contains("/")
-                ? new File(context.getFilesDir(), name) : null);
+        return name.startsWith("collection-") && !name.contains("/")
+                ? new File(context.getFilesDir(), name) : null;
     }
 
     static void importImages(Context context, List<Uri> sources, BooleanSupplier cancelled) throws IOException {

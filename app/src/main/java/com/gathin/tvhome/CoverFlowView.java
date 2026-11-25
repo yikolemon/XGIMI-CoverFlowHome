@@ -14,15 +14,21 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.SoundEffectConstants;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 import android.util.LruCache;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /** One focus target, one horizontal carousel. No RecyclerView focus search can escape into another row. */
@@ -47,9 +53,16 @@ final class CoverFlowView extends View {
     private final Path clip = new Path();
     private final RectF backdrop = new RectF();
     private final Typeface textTypeface = Typeface.create("sans-serif", Typeface.NORMAL);
-    // At most six distinct posters during a transition (five at rest), 200*300*4 bytes each:
-    // 1,440,000 bytes maximum, regardless of how many favourites the owner adds.
+    // Cache is UI-thread-only: six posters (1.44 MB), plus at most one five-poster worker batch.
     private final LruCache<String, Bitmap> posters = new LruCache<>(6);
+    private final Context artworkContext;
+    private final Handler artworkHandler = new Handler(Looper.getMainLooper());
+    private final ThreadPoolExecutor artworkLoader = new ThreadPoolExecutor(1, 1, 0L,
+            TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+    private volatile int artworkGeneration;
+    private boolean released;
+    private boolean artworkReady = true;
+    private Runnable onArtworkReady;
     private Shader sheen;
     private final Consumer<String> open;
     private final Runnable up;
@@ -74,6 +87,7 @@ final class CoverFlowView extends View {
 
     CoverFlowView(Context context, boolean animations, Consumer<String> open, Runnable up) {
         super(context);
+        artworkContext = context.getApplicationContext();
         this.open = open;
         this.up = up;
         this.animations = animations;
@@ -94,6 +108,7 @@ final class CoverFlowView extends View {
     }
 
     void setApps(List<App> next, String previous, boolean forceReload) {
+        if (released) return;
         boolean same = apps.size() == next.size();
         for (int i = 0; same && i < next.size(); i++) {
             same = apps.get(i).artworkKey.equals(next.get(i).artworkKey);
@@ -315,7 +330,7 @@ final class CoverFlowView extends View {
     }
 
     /** Original portrait artwork: app identity, not a stretched landscape banner or an unrelated movie poster. */
-    private Bitmap poster(App app) {
+    private static Bitmap poster(Context context, App app) {
         int w = 300, h = 450;
         Bitmap bitmap = Bitmap.createBitmap(200, 300, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
@@ -341,11 +356,12 @@ final class CoverFlowView extends View {
         p.setColor(0x14FFFFFF);
         canvas.drawRoundRect(new RectF(68, 130, 232, 294), 30, 30, p);
         Drawable icon;
-        try { icon = getContext().getPackageManager().getApplicationIcon(app.pkg); }
+        try { icon = context.getPackageManager().getApplicationIcon(app.pkg); }
         catch (android.content.pm.PackageManager.NameNotFoundException | RuntimeException unavailable) {
-            icon = getContext().getDrawable(R.drawable.ic_apps);
+            icon = context.getDrawable(R.drawable.ic_apps);
         }
         if (icon != null) {
+            icon = icon.mutate();
             android.graphics.Rect oldBounds = icon.copyBounds();
             icon.setBounds(76, 138, 224, 286);
             icon.draw(canvas);
@@ -370,17 +386,59 @@ final class CoverFlowView extends View {
         invalidate();
     }
 
-    /** Rasterise only upcoming visible covers, never in onDraw or for the whole application catalogue. */
+    /** Only the newest visible batch is queued. No PackageManager or raster work on the UI thread. */
     private void warmPosters() {
-        if (apps.isEmpty()) return;
-        for (int slot = -2; slot <= 2; slot++) {
-            int index = CoverFlowMath.index(selection + slot, apps.size());
+        if (released) return;
+        int generation = ++artworkGeneration;
+        artworkLoader.getQueue().clear();
+        List<App> missing = new ArrayList<>();
+        for (int index : CoverFlowMath.visibleIndices(selection, apps.size())) {
             App app = apps.get(index);
-            if (posters.get(app.artworkKey) == null) posters.put(app.artworkKey, poster(app));
+            if (posters.get(app.artworkKey) == null) missing.add(app);
         }
+        artworkReady = missing.isEmpty();
+        if (artworkReady) {
+            if (onArtworkReady != null) onArtworkReady.run();
+            return;
+        }
+        artworkLoader.execute(() -> {
+            for (App app : missing) {
+                if (generation != artworkGeneration || Thread.currentThread().isInterrupted()) return;
+                Bitmap bitmap;
+                try { bitmap = poster(artworkContext, app); }
+                catch (RuntimeException | OutOfMemoryError failure) {
+                    Log.w("TvHome.Artwork", "Could not prepare poster for " + app.pkg, failure);
+                    continue;
+                }
+                if (generation != artworkGeneration || Thread.currentThread().isInterrupted()) {
+                    bitmap.recycle();
+                    return;
+                }
+                if (!artworkHandler.post(() -> {
+                    if (released || generation != artworkGeneration) {
+                        bitmap.recycle(); // This bitmap was never published to the render thread.
+                        return;
+                    }
+                    posters.put(app.artworkKey, bitmap);
+                    invalidate();
+                })) bitmap.recycle();
+            }
+            artworkHandler.post(() -> {
+                if (released || generation != artworkGeneration) return;
+                artworkReady = true;
+                if (onArtworkReady != null) onArtworkReady.run();
+            });
+        });
     }
 
+    boolean isArtworkReady() { return artworkReady; }
+
+    void setOnArtworkReady(Runnable listener) { onArtworkReady = listener; }
+
     void clearArtwork() {
+        artworkGeneration++;
+        artworkLoader.getQueue().clear();
+        artworkReady = false;
         posters.evictAll();
         frost = null;
         // Do not recycle bitmaps still referenced by Android's render thread.
@@ -390,8 +448,11 @@ final class CoverFlowView extends View {
     void restoreArtwork() { warmPosters(); invalidate(); }
 
     void release() {
+        released = true;
+        onArtworkReady = null;
         stopAnimation();
         clearArtwork();
+        artworkLoader.shutdownNow();
         apps.clear();
     }
 }

@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
+  <string name="home_load_failed">桌面加载失败，按确定键重试。</string>
   <string name="app_name">极米桌面</string>
   <string name="date_format_home">M月d日 · EEEE</string>
   <string name="app_library">应用库</string>

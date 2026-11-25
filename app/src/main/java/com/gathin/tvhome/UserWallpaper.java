@@ -34,8 +34,9 @@ final class UserWallpaper {
 
     static long revision(Context context) {
         if (UserWallpaperCollection.enabled(context)) {
-            java.util.List<File> images = UserWallpaperCollection.images(context);
-            if (!images.isEmpty()) return images.get(0).getAbsolutePath().hashCode();
+            // Each import gets an immutable UUID directory. No need to rescan all images on resume.
+            File directory = UserWallpaperCollection.directory(context);
+            if (directory != null && directory.isDirectory()) return directory.getAbsolutePath().hashCode();
         }
         File image = file(context);
         return enabled(context) ? image.lastModified() ^ image.length() : 0;

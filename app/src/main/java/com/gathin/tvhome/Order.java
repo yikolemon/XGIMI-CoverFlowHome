@@ -96,8 +96,8 @@ final class Order {
     }
 
     /** The saved order, or null when there is none or it does not decode (then it is ignored, not deleted). */
-    static Order load(File file) {
-        if (!file.exists()) return null;
+    static synchronized Order load(File file) {
+        if (!file.exists() && !new File(file.getPath() + ".bak").exists()) return null;
         try {
             Order o = decode(new String(new AtomicFile(file).readFully(), StandardCharsets.UTF_8));
             if (o == null) Log.w(TAG, file.getName() + " is not valid; ignored");
@@ -109,7 +109,7 @@ final class Order {
     }
 
     /** Writes the order atomically. False (and a log line) when the write failed. */
-    static boolean save(File file, Order order) {
+    static synchronized boolean save(File file, Order order) {
         AtomicFile af = new AtomicFile(file);
         FileOutputStream out = null;
         try {

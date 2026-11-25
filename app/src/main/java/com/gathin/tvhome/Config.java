@@ -35,6 +35,7 @@ final class Config {
     final int backgroundColor, wallpaperDim, wallpaperRotationMinutes;
     final String wallpaperOrder;
     final List<File> wallpapers;
+    final String wallpaperCollectionKey;
 
     private Config(List<String> dockApps, List<String> hiddenApps, Map<String, String> appLabels,
                    boolean animations, int backgroundColor, boolean wallpaperTrueColor,
@@ -51,6 +52,7 @@ final class Config {
         this.wallpaperRotationMinutes = wallpaperRotationMinutes;
         this.wallpaperOrder = wallpaperOrder;
         this.wallpapers = Collections.unmodifiableList(wallpapers);
+        this.wallpaperCollectionKey = WallpaperSelection.collectionKey(wallpapers);
     }
 
     static Config load(Context context) {
@@ -75,38 +77,39 @@ final class Config {
                 .getBoolean(ROTATION_ENABLED_KEY, configuredRotation > 0);
         int rotationMinutes = rotationEnabled
                 ? (configuredRotation > 0 ? configuredRotation : DEFAULT_WALLPAPER_ROTATION_MINUTES) : 0;
-        File themeDir = context.getExternalFilesDir(null);
-        List<File> wallpapers = new ArrayList<>();
-        if (enabled && themeDir != null) {
-            wallpapers.addAll(WallpaperRotation.images(new File(themeDir, "wallpapers")));
-            File wallpaper = new File(themeDir, "wallpaper.jpg");
-            if (wallpapers.isEmpty() && wallpaper.isFile() && wallpaper.length() > 0) wallpapers.add(wallpaper);
-        }
-        if (enabled && wallpapers.isEmpty() && rotationMinutes > 0) {
-            File bundled = new File(context.getFilesDir(), "bundled_wallpapers");
-            copyBundledWallpapers(context, bundled);
-            wallpapers.addAll(WallpaperRotation.images(bundled));
-        }
-        if (enabled && wallpapers.isEmpty()) {
-            File wallpaper = new File(context.getFilesDir(), "wallpaper.jpg");
-            if (copyDefaultWallpaper(context, wallpaper)) wallpapers.add(wallpaper);
-        }
-        if (UserWallpaper.enabled(context)) {
-            wallpapers.clear();
-            wallpapers.add(UserWallpaper.file(context));
-        }
-        if (UserWallpaperCollection.enabled(context)) {
-            List<File> imported = UserWallpaperCollection.images(context);
-            if (!imported.isEmpty()) {
-                wallpapers.clear();
-                wallpapers.addAll(imported);
-                rotationMinutes = 30;
-            }
-        }
+        final int themeRotation = rotationMinutes;
+        WallpaperSelection selection = WallpaperSelection.select(enabled,
+                () -> UserWallpaperCollection.enabled(context)
+                        ? UserWallpaperCollection.images(context) : Collections.emptyList(),
+                () -> UserWallpaper.enabled(context)
+                        ? Collections.singletonList(UserWallpaper.file(context)) : Collections.emptyList(),
+                () -> themeWallpapers(context, themeRotation));
+        List<File> wallpapers = selection.files;
+        if (selection.collection) rotationMinutes = DEFAULT_WALLPAPER_ROTATION_MINUTES;
         return new Config(dock, hidden, labels, json.optBoolean("animations", true), background,
                 json.optBoolean("wallpaper_true_color", false), !wallpapers.isEmpty(),
                 json.optInt("wallpaper_dim", 25), rotationMinutes,
                 json.optString("wallpaper_order", WallpaperRotation.ORDER_SHUFFLE), wallpapers);
+    }
+
+    private static List<File> themeWallpapers(Context context, int rotationMinutes) {
+        List<File> wallpapers = new ArrayList<>();
+        File themeDir = context.getExternalFilesDir(null);
+        if (themeDir != null) {
+            wallpapers.addAll(WallpaperRotation.images(new File(themeDir, "wallpapers")));
+            File wallpaper = new File(themeDir, "wallpaper.jpg");
+            if (wallpapers.isEmpty() && wallpaper.isFile() && wallpaper.length() > 0) wallpapers.add(wallpaper);
+        }
+        if (wallpapers.isEmpty() && rotationMinutes > 0) {
+            File bundled = new File(context.getFilesDir(), "bundled_wallpapers");
+            copyBundledWallpapers(context, bundled);
+            wallpapers.addAll(WallpaperRotation.images(bundled));
+        }
+        if (wallpapers.isEmpty()) {
+            File wallpaper = new File(context.getFilesDir(), "wallpaper.jpg");
+            if (copyDefaultWallpaper(context, wallpaper)) wallpapers.add(wallpaper);
+        }
+        return wallpapers;
     }
 
     static boolean wallpaperRotationEnabled(Context context) {

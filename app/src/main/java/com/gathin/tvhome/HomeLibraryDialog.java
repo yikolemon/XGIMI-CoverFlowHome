@@ -283,7 +283,6 @@ final class HomeLibraryDialog {
         selected = pkg;
         dismissActions();
         changed.run();
-        refresh();
     }
 
     private void beginReorder(String pkg) {

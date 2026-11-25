@@ -63,7 +63,7 @@ final class WallpaperPlayer {
         settings = context.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE);
         // Playback state belongs to one collection. Changing the collection starts from its first
         // picture instead of resuming a filename that belonged to the previous one.
-        String collection = collectionKey(files);
+        String collection = config.wallpaperCollectionKey;
         if (!collection.equals(preferences.getString("collection", ""))) {
             preferences.edit().putString("collection", collection)
                     .remove("image").remove("changed").apply();
@@ -137,6 +137,8 @@ final class WallpaperPlayer {
 
     void setOnImageChanged(Runnable listener) { imageChanged = listener; }
 
+    boolean isReady() { return !displayed.isEmpty() || files.isEmpty(); }
+
     /** Release the full-screen decoded image when a hidden launcher is under memory pressure. */
     void trim() {
         if (active || closed) return;
@@ -153,7 +155,11 @@ final class WallpaperPlayer {
     }
 
     void update() {
-        if (!active || closed || loading || files.isEmpty()) return;
+        if (!active || closed || loading) return;
+        if (files.isEmpty()) {
+            if (imageChanged != null) imageChanged.run();
+            return;
+        }
         String previous = preferences.getString("image", "");
         File selected = WallpaperRotation.find(files, previous);
         long changed = preferences.getLong("changed", 0);
@@ -179,8 +185,8 @@ final class WallpaperPlayer {
                     return;
                 }
                 image.setImageBitmap(bitmap);
-                if (imageChanged != null) imageChanged.run();
                 displayed = next.getName();
+                if (imageChanged != null) imageChanged.run();
                 if (!displayed.equals(previous) || changed == 0) {
                     preferences.edit().putString("image", displayed)
                             .putLong("changed", System.currentTimeMillis()).apply();
@@ -188,13 +194,6 @@ final class WallpaperPlayer {
                 scheduleRotation();
             });
         });
-    }
-
-    /** Names plus sizes: enough to notice a different collection without hashing every image. */
-    private static String collectionKey(List<File> images) {
-        StringBuilder key = new StringBuilder();
-        for (File file : images) key.append(file.getName()).append(':').append(file.length()).append(';');
-        return key.toString();
     }
 
     private Bitmap decode(File file) {

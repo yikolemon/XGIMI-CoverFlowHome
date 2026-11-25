@@ -4,6 +4,23 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class CoverFlowMathTest {
+    @Test public void artworkIsPreparedCentreFirstThenNeighbours() {
+        assertArrayEquals(new int[]{0, 6, 1, 5, 2}, CoverFlowMath.visibleIndices(0, 7));
+        assertArrayEquals(new int[]{3, 2, 4, 1, 5}, CoverFlowMath.visibleIndices(3, 7));
+    }
+
+    @Test public void smallCarouselsNeverQueueDuplicateArtwork() {
+        assertArrayEquals(new int[]{0}, CoverFlowMath.visibleIndices(0, 1));
+        assertArrayEquals(new int[]{0, 1}, CoverFlowMath.visibleIndices(0, 2));
+        assertArrayEquals(new int[]{0, 3, 1, 2}, CoverFlowMath.visibleIndices(0, 4));
+    }
+
+    @Test public void artworkWorkIsBoundedForLargeAndEmptyCarousels() {
+        assertEquals(0, CoverFlowMath.visibleIndices(0, 0).length);
+        assertEquals(5, CoverFlowMath.visibleIndices(0, 128).length);
+        assertArrayEquals(new int[]{6, 5, 0, 4, 1}, CoverFlowMath.visibleIndices(-1, 7));
+    }
+
     @Test public void selectionWrapsInBothDirections() {
         assertEquals(3, CoverFlowMath.index(-1, 4));
         assertEquals(0, CoverFlowMath.index(4, 4));

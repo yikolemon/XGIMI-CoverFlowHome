@@ -12,6 +12,20 @@ final class CoverFlowMath {
         return count <= 0 ? 0 : Math.floorMod(position, count);
     }
 
+    /** Visible artwork is prepared centre-first, with no duplicate work for small carousels. */
+    static int[] visibleIndices(int selection, int count) {
+        int[] result = new int[Math.min(5, Math.max(0, count))];
+        int size = 0;
+        for (int offset : new int[]{0, -1, 1, -2, 2}) {
+            if (size == result.length) break;
+            int candidate = index(selection + offset, count);
+            boolean duplicate = false;
+            for (int i = 0; i < size; i++) if (result[i] == candidate) duplicate = true;
+            if (!duplicate) result[size++] = candidate;
+        }
+        return result;
+    }
+
     static float distance(int index, float position, int count) {
         if (count <= 1) return 0f;
         float value = (index - position) % count;

@@ -48,20 +48,7 @@ final class CoverFlowHome {
     private final java.util.concurrent.ExecutorService appLoader = java.util.concurrent.Executors.newSingleThreadExecutor();
     private int loadGeneration;
     private boolean closed;
-    private boolean resumeWorkPosted;
-    private final Runnable resumeWork = new Runnable() {
-        @Override public void run() {
-            resumeWorkPosted = false;
-            if (!resumed) return;
-            if (appsDirty) {
-                reload();
-                appsDirty = false;
-            }
-            carousel.restoreArtwork();
-            wallpaper.start();
-            updateFrost();
-        }
-    };
+    private boolean appsLoaded, fullyDrawnReported, fullyDrawnPosted;
     private WeakReference<Bitmap> sampledWallpaper = new WeakReference<>(null);
     private final List<String> packages = new ArrayList<>();
     private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
@@ -70,9 +57,8 @@ final class CoverFlowHome {
                     && intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return;
             appsDirty = true;
             if (resumed) {
-                reload();
+                reload(true);
                 appsDirty = false;
-                if (library != null) library.refresh();
             }
         }
     };
@@ -154,7 +140,11 @@ final class CoverFlowHome {
         root.addView(libraryButton, libraryParams);
         carousel.setNextFocusUpId(libraryButton.getId());
         libraryButton.setNextFocusDownId(carousel.getId());
-        wallpaper.setOnImageChanged(this::updateFrost);
+        wallpaper.setOnImageChanged(() -> {
+            updateFrost();
+            reportReady();
+        });
+        carousel.setOnArtworkReady(this::reportReady);
         appsDirty = true;
         root.post(() -> {
             updateFrost();
@@ -190,6 +180,7 @@ final class CoverFlowHome {
     }
 
     private void reload(boolean forceReload) {
+        if (closed) return;
         String previous = carousel.selectedPackage();
         int generation = ++loadGeneration;
         appLoader.execute(() -> {
@@ -220,11 +211,28 @@ final class CoverFlowHome {
         }
         root.post(() -> {
             if (closed || generation != loadGeneration) return;
+            boolean libraryChanged = forceReload || !packages.equals(loadedPackages);
             packages.clear();
             packages.addAll(loadedPackages);
+            appsLoaded = true;
             carousel.setLoading(false);
             carousel.setApps(apps, carousel.selectedPackage() != null ? carousel.selectedPackage() : previous, forceReload);
+            // Refresh only after the supplier exposes the newly committed membership/order.
+            if (library != null && libraryChanged) library.refresh();
         });
+        });
+    }
+
+    /** Measure usable content, not just an early empty background (ActivityManager fully-drawn time). */
+    private void reportReady() {
+        if (fullyDrawnReported || fullyDrawnPosted || closed || !resumed || !appsLoaded
+                || !wallpaper.isReady() || !carousel.isArtworkReady()) return;
+        fullyDrawnPosted = true;
+        root.postOnAnimation(() -> {
+            fullyDrawnPosted = false;
+            if (closed || !resumed || fullyDrawnReported || !wallpaper.isReady() || !carousel.isArtworkReady()) return;
+            activity.reportFullyDrawn();
+            fullyDrawnReported = true;
         });
     }
 
@@ -270,6 +278,10 @@ final class CoverFlowHome {
         if (updated.size() != packages.size() || new java.util.HashSet<>(updated).size() != packages.size()
                 || !new java.util.HashSet<>(updated).equals(new java.util.HashSet<>(packages))) return false;
         if (!Order.save(new File(activity.getFilesDir(), "cover_flow_order.txt"), new Order("", updated))) return false;
+        // The library refreshes synchronously when this returns; reload() publishes its result later.
+        // Commit the saved order now so that refresh cannot restore the previous order.
+        packages.clear();
+        packages.addAll(updated);
         reload();
         return true;
     }
@@ -311,18 +323,18 @@ final class CoverFlowHome {
         }
         resumed = true;
         hideLibraryButton();
-        if (!resumeWorkPosted) {
-            resumeWorkPosted = true;
-            root.postOnAnimation(() -> {
-                if (resumeWorkPosted && resumed) root.post(resumeWork);
-            });
+        // Both loaders are asynchronous; start them now instead of waiting for another frame.
+        wallpaper.start();
+        if (appsDirty) {
+            reload();
+            appsDirty = false;
         }
+        carousel.restoreArtwork();
+        updateFrost();
     }
 
     void pause() {
         resumed = false;
-        resumeWorkPosted = false;
-        root.removeCallbacks(resumeWork);
         wallpaper.stop();
         carousel.stopAnimation();
         if (library != null) library.close();

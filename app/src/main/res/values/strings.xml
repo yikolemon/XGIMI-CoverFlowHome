@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
+  <string name="home_load_failed">Unable to load Home. Press OK to retry.</string>
   <string name="app_name">XGIMI Home</string>
   <string name="date_format_home">MMM d · EEEE</string>
   <string name="app_library">App library</string>
