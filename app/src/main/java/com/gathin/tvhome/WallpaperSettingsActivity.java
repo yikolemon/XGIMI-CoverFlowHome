@@ -51,7 +51,10 @@ public final class WallpaperSettingsActivity extends Activity {
         panel.setGravity(Gravity.CENTER);
         panel.setPadding(dp(64), dp(32), dp(64), dp(32));
         panel.setBackgroundColor(0xFF10151F);
-        setContentView(panel);
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(panel);
+        setContentView(scroll);
         TextView title = text(getString(R.string.local_wallpaper_title), 26);
         panel.addView(title, new LinearLayout.LayoutParams(-1, dp(56)));
         String current = getString(R.string.local_wallpaper_default);
@@ -99,6 +102,7 @@ public final class WallpaperSettingsActivity extends Activity {
             setResult(RESULT_OK);
             finish();
         });
+        button(panel, R.string.screensaver_title, () -> startActivity(new Intent(this, ScreensaverSettingsActivity.class)));
         TextView hint = text(getString(R.string.local_wallpaper_hint), 13);
         hint.setTextColor(0x99FFFFFF);
         hint.setPadding(0, dp(20), 0, 0);

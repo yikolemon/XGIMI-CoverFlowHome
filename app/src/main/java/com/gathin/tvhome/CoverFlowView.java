@@ -61,6 +61,7 @@ final class CoverFlowView extends View {
             TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
     private volatile int artworkGeneration;
     private boolean released;
+    private boolean artworkPaused;
     private boolean artworkReady = true;
     private Runnable onArtworkReady;
     private Shader sheen;
@@ -388,7 +389,7 @@ final class CoverFlowView extends View {
 
     /** Only the newest visible batch is queued. No PackageManager or raster work on the UI thread. */
     private void warmPosters() {
-        if (released) return;
+        if (released || artworkPaused) return;
         int generation = ++artworkGeneration;
         artworkLoader.getQueue().clear();
         List<App> missing = new ArrayList<>();
@@ -436,6 +437,7 @@ final class CoverFlowView extends View {
     void setOnArtworkReady(Runnable listener) { onArtworkReady = listener; }
 
     void clearArtwork() {
+        artworkPaused = true;
         artworkGeneration++;
         artworkLoader.getQueue().clear();
         artworkReady = false;
@@ -445,7 +447,7 @@ final class CoverFlowView extends View {
         invalidate();
     }
 
-    void restoreArtwork() { warmPosters(); invalidate(); }
+    void restoreArtwork() { artworkPaused = false; warmPosters(); invalidate(); }
 
     void release() {
         released = true;

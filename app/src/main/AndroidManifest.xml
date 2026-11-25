@@ -34,5 +34,10 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
+        <activity android:name=".ScreensaverActivity" android:exported="false"
+            android:excludeFromRecents="true" android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|uiMode" />
+        <activity android:name=".ScreensaverSettingsActivity" android:exported="false"
+            android:excludeFromRecents="true" android:screenOrientation="landscape" />
     </application>
 </manifest>

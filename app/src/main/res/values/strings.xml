@@ -34,4 +34,24 @@
   <string name="home_library_sort_hint">← → Move · OK Save · Back Cancel</string>
   <string name="home_library_moving">← Moving →</string>
   <string name="wallpaper_applied">Wallpaper updated.</string>
+    <string name="screensaver_title">Video screensaver</string>
+    <string name="screensaver_loading">Loading local videos…</string>
+    <string name="screensaver_no_videos">No videos. Import videos in wallpaper settings → Video screensaver.</string>
+    <string name="screensaver_play_hint">Down: choose video · Double Back: exit</string>
+    <string name="screensaver_back_again">Press Back again quickly to exit</string>
+    <string name="screensaver_play_failed">These videos could not be played. Down: choose · Double Back: exit</string>
+    <string name="screensaver_import">Import local videos (replace collection)</string>
+    <string name="screensaver_timeout_off">Auto screensaver: off</string>
+    <string name="screensaver_timeout_minutes">Auto screensaver idle timeout (min): %1$d</string>
+    <string name="screensaver_timeout_title">Desktop idle time</string>
+    <string name="screensaver_mute">Mute video sound</string>
+    <string name="screensaver_preview">Start screensaver now</string>
+    <string name="screensaver_refresh">Refresh local video directory</string>
+    <string name="screensaver_remove">Remove imported collection</string>
+    <string name="screensaver_remove_confirm">Remove imported videos? Files in the external screensaver directory will not be deleted.</string>
+    <string name="screensaver_settings_hint">Home: focus the top-right button, then press Up three times within 2 seconds.\nDown shows video covers; double Back exits. Muted looping by default.\nUp to 20 videos, 512 MiB each, 2 GiB per import. 1080p H.264 MP4 recommended.\nWithout a file picker, copy videos here and refresh:\n%1$s</string>
+    <string name="screensaver_no_picker">No video file picker. Copy videos to the directory shown below, then refresh.</string>
+    <string name="screensaver_import_failed">Video update failed. Check file type, size, free space and access. Previous videos were kept.</string>
+    <string name="screensaver_imported">Video collection updated</string>
+    <string name="screensaver_video_count">Available local videos: %1$d</string>
 </resources>

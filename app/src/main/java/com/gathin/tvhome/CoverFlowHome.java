@@ -49,6 +49,10 @@ final class CoverFlowHome {
     private int loadGeneration;
     private boolean closed;
     private boolean appsLoaded, fullyDrawnReported, fullyDrawnPosted;
+    private final ScreensaverRules.UpSequence screensaverUp = new ScreensaverRules.UpSequence();
+    private long lastInput;
+    private boolean windowFocused, openingScreensaver;
+    private final Runnable idleScreensaver = () -> updateScreensaverTimer(true);
     private WeakReference<Bitmap> sampledWallpaper = new WeakReference<>(null);
     private final List<String> packages = new ArrayList<>();
     private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
@@ -115,6 +119,7 @@ final class CoverFlowHome {
         libraryButton.setFocusable(true);
         libraryButton.setVisibility(View.INVISIBLE);
         libraryButton.setOnFocusChangeListener((view, focused) -> {
+            screensaverUp.reset();
             libraryButton.setBackground(buttonSurface(focused));
             libraryButton.animate().scaleX(focused ? 1.04f : 1f).scaleY(focused ? 1.04f : 1f)
                     .setDuration(config.animations ? 140 : 0).start();
@@ -127,6 +132,11 @@ final class CoverFlowHome {
         });
         libraryButton.setOnKeyListener((v, code, event) -> {
             if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+            if (code == KeyEvent.KEYCODE_DPAD_UP) {
+                if (event.getRepeatCount() == 0 && screensaverUp.press(android.os.SystemClock.uptimeMillis())) openScreensaver(false);
+                return true;
+            }
+            screensaverUp.reset();
             if (code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_BACK) {
                 hideLibraryButton();
                 return true;
@@ -265,10 +275,12 @@ final class CoverFlowHome {
 
     private void showLibrary() {
         if (library != null || closed) return;
+        root.removeCallbacks(idleScreensaver);
         library = new HomeLibraryDialog(activity, () -> new ArrayList<>(packages),
                 this::saveHomeOrder, () -> reload(true), () -> {
                     library = null;
                     hideLibraryButton();
+                    userInput();
                 });
         library.show();
     }
@@ -322,6 +334,9 @@ final class CoverFlowHome {
             return;
         }
         resumed = true;
+        windowFocused = activity.hasWindowFocus();
+        openingScreensaver = false;
+        userInput();
         hideLibraryButton();
         // Both loaders are asynchronous; start them now instead of waiting for another frame.
         wallpaper.start();
@@ -335,6 +350,8 @@ final class CoverFlowHome {
 
     void pause() {
         resumed = false;
+        root.removeCallbacks(idleScreensaver);
+        screensaverUp.reset();
         wallpaper.stop();
         carousel.stopAnimation();
         if (library != null) library.close();
@@ -342,6 +359,9 @@ final class CoverFlowHome {
 
     void stop() {
         // Keep observing package changes while another app is foreground, but defer work to resume.
+        carousel.clearArtwork();
+        sampledWallpaper.clear();
+        wallpaper.trim();
     }
 
     void home() {
@@ -362,6 +382,7 @@ final class CoverFlowHome {
 
     void close() {
         closed = true;
+        root.removeCallbacks(idleScreensaver);
         loadGeneration++;
         appLoader.shutdownNow();
         if (registered) activity.unregisterReceiver(packageReceiver);
@@ -369,4 +390,44 @@ final class CoverFlowHome {
         wallpaper.close();
         carousel.release();
     }
+
+    void userInput() {
+        lastInput = android.os.SystemClock.uptimeMillis();
+        updateScreensaverTimer(false);
+    }
+
+    void windowFocus(boolean focused) {
+        windowFocused = focused;
+        screensaverUp.reset();
+        userInput();
+    }
+
+    private void updateScreensaverTimer(boolean fire) {
+        root.removeCallbacks(idleScreensaver);
+        android.content.SharedPreferences prefs = ScreensaverStore.preferences(activity);
+        long delay = ScreensaverRules.idleDelay(lastInput, android.os.SystemClock.uptimeMillis(),
+                prefs.getInt("timeout_minutes", 10), resumed && windowFocused && library == null && !closed && !openingScreensaver,
+                prefs.getInt("video_count", 0) > 0);
+        if (delay < 0) return;
+        if (fire && delay == 0) openScreensaver(true);
+        else root.postDelayed(idleScreensaver, delay);
+    }
+
+    private void openScreensaver(boolean automatic) {
+        if (!resumed || closed || openingScreensaver) return;
+        root.removeCallbacks(idleScreensaver);
+        if (ScreensaverStore.preferences(activity).getInt("video_count", 0) <= 0) {
+            if (!automatic) activity.startActivity(new Intent(activity, ScreensaverSettingsActivity.class));
+            return;
+        }
+        try {
+            openingScreensaver = true;
+            activity.startActivity(new Intent(activity, ScreensaverActivity.class).putExtra("automatic", automatic));
+        } catch (ActivityNotFoundException | SecurityException failure) {
+            openingScreensaver = false;
+            android.util.Log.w("TvHome.Screensaver", "Cannot start screensaver", failure);
+            userInput();
+        }
+    }
+
 }

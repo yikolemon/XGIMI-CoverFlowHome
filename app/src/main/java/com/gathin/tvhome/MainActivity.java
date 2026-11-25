@@ -52,6 +52,8 @@ public final class MainActivity extends Activity {
     @Override protected void onResume() { super.onResume(); resumed = true; if (home != null) home.resume(); }
     @Override protected void onPause() { resumed = false; if (home != null) home.pause(); super.onPause(); }
     @Override protected void onStop() { started = false; if (home != null) home.stop(); super.onStop(); }
+    @Override public void onUserInteraction() { super.onUserInteraction(); if (home != null) home.userInput(); }
+    @Override public void onWindowFocusChanged(boolean focused) { super.onWindowFocusChanged(focused); if (home != null) home.windowFocus(focused); }
     @Override protected void onNewIntent(android.content.Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
