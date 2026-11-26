@@ -39,6 +39,11 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -51,8 +56,11 @@ final class HomeLibraryDialog {
     private final float density;
     private final LinearLayout panel;
     private final PopupWindow popup;
-    // 16 * 80 * 80 * 4 = 400 KiB. No original-size icon or portrait artwork is retained here.
-    private final LruCache<String, Bitmap> icons = new LruCache<>(16);
+    // 48 * 80 * 80 * 4 = 1.2 MiB max while dialog is open; evicted completely on dismiss.
+    private final LruCache<String, Bitmap> icons = new LruCache<>(48);
+    private final ExecutorService scanLoader = Executors.newSingleThreadExecutor();
+    private final ThreadPoolExecutor iconLoader = new ThreadPoolExecutor(1, 1, 0L,
+            TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
     private final Map<String, ResolveInfo> installed = new LinkedHashMap<>();
     private final Map<String, String> labels = new HashMap<>();
     private final List<String> home = new ArrayList<>(), others = new ArrayList<>();
@@ -61,7 +69,8 @@ final class HomeLibraryDialog {
     private TextView hint;
     private PopupWindow actions;
     private String selected, moving;
-    private boolean closing;
+    private volatile int refreshGeneration;
+    private boolean closing, dismissedCalled;
     private int columns;
     private final int width, height;
 
@@ -100,7 +109,12 @@ final class HomeLibraryDialog {
         popup.setOutsideTouchable(true);
         popup.setAnimationStyle(0);
         popup.setOnDismissListener(() -> {
+            closing = true;
+            dismissedCalled = true;
+            refreshGeneration++;
             moving = null; // An unfinished draft was never written to disk.
+            scanLoader.shutdownNow();
+            iconLoader.shutdownNow();
             dismissActions();
             releaseLists();
             panel.removeAllViews();
@@ -112,8 +126,11 @@ final class HomeLibraryDialog {
     }
 
     void show() {
-        refresh();
+        TextView loadingView = text(activity.getString(R.string.screensaver_loading), 15, 0x99FFFFFF);
+        loadingView.setGravity(Gravity.CENTER);
+        panel.addView(loadingView, new LinearLayout.LayoutParams(-1, -1));
         popup.showAtLocation(activity.getWindow().getDecorView(), Gravity.CENTER, 0, 0);
+        refresh();
         View container = panel.getRootView();
         if (container.getLayoutParams() instanceof WindowManager.LayoutParams) {
             WindowManager.LayoutParams params = (WindowManager.LayoutParams) container.getLayoutParams();
@@ -132,39 +149,59 @@ final class HomeLibraryDialog {
     }
 
     void refresh() {
+        if (closing || dismissedCalled) return;
         moving = null;
         dismissActions();
-        installed.clear();
-        labels.clear();
-        PackageManager pm = activity.getPackageManager();
-        for (String category : new String[]{Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER}) {
-            for (ResolveInfo info : pm.queryIntentActivities(new Intent(Intent.ACTION_MAIN).addCategory(category), 0)) {
-                if (info.activityInfo == null || !info.activityInfo.exported) continue;
-                String pkg = info.activityInfo.packageName;
-                if (!pkg.equals(activity.getPackageName())) installed.putIfAbsent(pkg, info);
+        final int generation = ++refreshGeneration;
+        iconLoader.getQueue().clear();
+        final List<String> orderSnapshot = new ArrayList<>(order.get());
+        final PackageManager pm = activity.getPackageManager();
+        final String selfPkg = activity.getPackageName();
+        scanLoader.execute(() -> {
+            if (closing || generation != refreshGeneration) return;
+            Map<String, ResolveInfo> nextInstalled = new LinkedHashMap<>();
+            for (String category : new String[]{Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER}) {
+                for (ResolveInfo info : pm.queryIntentActivities(new Intent(Intent.ACTION_MAIN).addCategory(category), 0)) {
+                    if (info.activityInfo == null || !info.activityInfo.exported) continue;
+                    String pkg = info.activityInfo.packageName;
+                    if (!pkg.equals(selfPkg)) nextInstalled.putIfAbsent(pkg, info);
+                }
             }
-        }
-        home.clear();
-        home.addAll(LibrarySections.home(installed.keySet(), order.get()));
-        List<String> alphabetic = new ArrayList<>(installed.keySet());
-        Collator collator = Collator.getInstance();
-        alphabetic.sort((a, b) -> {
-            int byLabel = collator.compare(label(a), label(b));
-            return byLabel == 0 ? a.compareTo(b) : byLabel;
+            Map<String, String> nextLabels = new HashMap<>(nextInstalled.size());
+            for (Map.Entry<String, ResolveInfo> entry : nextInstalled.entrySet()) {
+                String value = entry.getKey();
+                try { value = entry.getValue().loadLabel(pm).toString(); }
+                catch (RuntimeException unavailable) { /* Package may have just been removed. */ }
+                nextLabels.put(entry.getKey(), value);
+            }
+            List<String> nextHome = LibrarySections.home(nextInstalled.keySet(), orderSnapshot);
+            List<String> alphabetic = new ArrayList<>(nextInstalled.keySet());
+            Collator collator = Collator.getInstance();
+            alphabetic.sort((a, b) -> {
+                String la = nextLabels.getOrDefault(a, a);
+                String lb = nextLabels.getOrDefault(b, b);
+                int byLabel = collator.compare(la, lb);
+                return byLabel == 0 ? a.compareTo(b) : byLabel;
+            });
+            List<String> nextOthers = LibrarySections.others(alphabetic, nextHome);
+            panel.post(() -> {
+                if (closing || dismissedCalled || !popup.isShowing() || generation != refreshGeneration) return;
+                installed.clear();
+                installed.putAll(nextInstalled);
+                labels.clear();
+                labels.putAll(nextLabels);
+                home.clear();
+                home.addAll(nextHome);
+                others.clear();
+                others.addAll(nextOthers);
+                build();
+            });
         });
-        others.clear();
-        others.addAll(LibrarySections.others(alphabetic, home));
-        build();
     }
 
     private String label(String pkg) {
         String cached = labels.get(pkg);
-        if (cached != null) return cached;
-        String value = pkg;
-        try { value = installed.get(pkg).loadLabel(activity.getPackageManager()).toString(); }
-        catch (RuntimeException unavailable) { /* Package may have just been removed. */ }
-        labels.put(pkg, value);
-        return value;
+        return cached != null ? cached : pkg;
     }
 
     private int dp(int value) { return Math.round(value * density); }
@@ -381,20 +418,19 @@ final class HomeLibraryDialog {
         menu.addView(button, new LinearLayout.LayoutParams(-1, dp(46)));
     }
 
-    private Bitmap icon(String pkg) {
-        Bitmap cached = icons.get(pkg);
-        if (cached != null) return cached;
+    private static Bitmap decodeIcon(PackageManager pm, ResolveInfo info, android.content.Context context) {
         Bitmap bitmap = Bitmap.createBitmap(80, 80, Bitmap.Config.ARGB_8888);
-        Drawable original;
-        try { original = installed.get(pkg).loadIcon(activity.getPackageManager()); }
-        catch (RuntimeException unavailable) { original = activity.getDrawable(R.drawable.ic_apps); }
+        Drawable original = null;
+        try { if (info != null) original = info.loadIcon(pm); }
+        catch (RuntimeException unavailable) { /* Fall back below. */ }
+        if (original == null) original = context.getDrawable(R.drawable.ic_apps);
         if (original != null) {
+            original = original.mutate();
             android.graphics.Rect previous = original.copyBounds();
             original.setBounds(0, 0, 80, 80);
             original.draw(new Canvas(bitmap));
             original.setBounds(previous);
         }
-        icons.put(pkg, bitmap);
         return bitmap;
     }
 
@@ -402,6 +438,7 @@ final class HomeLibraryDialog {
         final ImageView icon;
         final TextView name, detail, rank;
         final GradientDrawable background;
+        String pkg;
         Tile(FrameLayout frame, ImageView icon, TextView name, TextView detail, TextView rank, GradientDrawable background) {
             super(frame); this.icon = icon; this.name = name; this.detail = detail; this.rank = rank; this.background = background;
         }
@@ -443,30 +480,24 @@ final class HomeLibraryDialog {
             rank.setGravity(Gravity.CENTER);
             FrameLayout.LayoutParams rankParams = new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.TOP | Gravity.START);
             frame.addView(rank, rankParams);
-            return new Tile(frame, icon, name, detail, rank, background);
-        }
-
-        @Override public void onBindViewHolder(@NonNull Tile holder, int position) {
-            String pkg = entries().get(position);
-            holder.icon.setImageBitmap(icon(pkg));
-            holder.name.setText(label(pkg));
-            holder.rank.setText(isHome ? Integer.toString(position + 1) : "");
-            holder.detail.setText(isHome ? moving != null && pkg.equals(moving) ? R.string.home_library_moving
-                    : R.string.library_on_home : R.string.home_library_other_detail);
-            holder.style(holder.itemView.hasFocus(), pkg.equals(moving));
-            holder.itemView.setContentDescription((isHome ? (position + 1) + ". " : "") + label(pkg));
-            holder.itemView.setOnFocusChangeListener((view, focused) -> {
-                holder.style(focused, pkg.equals(moving));
-                if (focused) selected = pkg;
+            Tile holder = new Tile(frame, icon, name, detail, rank, background);
+            frame.setOnFocusChangeListener((view, focused) -> {
+                if (holder.pkg == null) return;
+                holder.style(focused, holder.pkg.equals(moving));
+                if (focused) selected = holder.pkg;
             });
-            holder.itemView.setOnClickListener(v -> {
+            frame.setOnClickListener(v -> {
+                if (holder.pkg == null) return;
                 if (moving != null) finishReorder(true);
-                else open(pkg);
+                else open(holder.pkg);
             });
-            holder.itemView.setOnLongClickListener(v -> { showActions(pkg, v); return true; });
-            holder.itemView.setOnKeyListener((v, key, event) -> {
-                if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
-                int index = entries().indexOf(pkg);
+            frame.setOnLongClickListener(v -> {
+                if (holder.pkg != null) showActions(holder.pkg, v);
+                return true;
+            });
+            frame.setOnKeyListener((v, key, event) -> {
+                if (event.getAction() != KeyEvent.ACTION_DOWN || holder.pkg == null) return false;
+                int index = entries().indexOf(holder.pkg);
                 if (index < 0) return true;
                 if (isHome) {
                     if (key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT) {
@@ -506,9 +537,43 @@ final class HomeLibraryDialog {
                 }
                 return false;
             });
+            return holder;
         }
 
-        @Override public void onViewRecycled(@NonNull Tile holder) { holder.icon.setImageDrawable(null); }
+        @Override public void onBindViewHolder(@NonNull Tile holder, int position) {
+            String pkg = entries().get(position);
+            holder.pkg = pkg;
+            Bitmap cached = icons.get(pkg);
+            if (cached != null) {
+                holder.icon.setImageBitmap(cached);
+            } else {
+                holder.icon.setImageResource(R.drawable.ic_apps);
+                ResolveInfo info = installed.get(pkg);
+                int generation = refreshGeneration;
+                PackageManager pm = activity.getPackageManager();
+                android.content.Context appContext = activity.getApplicationContext();
+                iconLoader.execute(() -> {
+                    if (closing || dismissedCalled || generation != refreshGeneration) return;
+                    Bitmap decoded = decodeIcon(pm, info, appContext);
+                    panel.post(() -> {
+                        if (closing || dismissedCalled || generation != refreshGeneration) {
+                            decoded.recycle();
+                            return;
+                        }
+                        icons.put(pkg, decoded);
+                        if (pkg.equals(holder.pkg)) holder.icon.setImageBitmap(decoded);
+                    });
+                });
+            }
+            holder.name.setText(label(pkg));
+            holder.rank.setText(isHome ? Integer.toString(position + 1) : "");
+            holder.detail.setText(isHome ? moving != null && pkg.equals(moving) ? R.string.home_library_moving
+                    : R.string.library_on_home : R.string.home_library_other_detail);
+            holder.style(holder.itemView.hasFocus(), pkg.equals(moving));
+            holder.itemView.setContentDescription((isHome ? (position + 1) + ". " : "") + label(pkg));
+        }
+
+        @Override public void onViewRecycled(@NonNull Tile holder) { holder.pkg = null; holder.icon.setImageDrawable(null); }
         @Override public int getItemCount() { return entries().size(); }
     }
 }

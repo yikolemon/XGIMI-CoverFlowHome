@@ -5,36 +5,39 @@ import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.provider.DocumentsContract;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Configuration/import has no player or thumbnails; importing a new set is transactional. */
+/** Bind readable folders without copying videos or decoding any thumbnails in settings. */
 public final class ScreensaverSettingsActivity extends Activity {
-    private static final int PICK = 1;
+    private static final int PICK = 1, VIDEO_PERMISSION = 2;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final List<View> controls = new ArrayList<>();
     private volatile boolean closed;
     private boolean busy;
     private int count;
     private SharedPreferences preferences;
-    private TextView status, timeout;
+    private TextView status, volume, timeout, folderStatus;
     private LinearLayout panel;
     private View previousFocus;
 
@@ -52,39 +55,27 @@ public final class ScreensaverSettingsActivity extends Activity {
         setContentView(scroll);
         TextView title = text(getString(R.string.screensaver_title), 24);
         panel.addView(title, new LinearLayout.LayoutParams(-1, dp(48)));
+        folderStatus = text(getString(R.string.screensaver_folder_none), 13);
+        folderStatus.setSingleLine(true);
+        folderStatus.setEllipsize(TextUtils.TruncateAt.MIDDLE);
+        folderStatus.setTextColor(0xB8FFFFFF);
+        panel.addView(folderStatus, new LinearLayout.LayoutParams(-1, dp(28)));
         status = text(getString(R.string.screensaver_loading), 14);
         panel.addView(status, new LinearLayout.LayoutParams(-1, dp(40)));
-        TextView importButton = button(R.string.screensaver_import, this::pick);
+        TextView folderButton = button(R.string.screensaver_folder_choose, this::pick);
+        volume = button(R.string.screensaver_volume_title, this::chooseVolume);
+        updateVolume();
         timeout = button(R.string.screensaver_timeout_off, this::chooseTimeout);
         updateTimeout();
-        Switch mute = new Switch(this);
-        mute.setText(R.string.screensaver_mute);
-        mute.setTextSize(16);
-        mute.setTextColor(Color.WHITE);
-        mute.setChecked(preferences.getBoolean("muted", true));
-        mute.setPadding(dp(20), 0, dp(20), 0);
-        mute.setOnCheckedChangeListener((view, checked) -> preferences.edit().putBoolean("muted", checked).apply());
-        panel.addView(mute, itemParams());
-        controls.add(mute);
-        button(R.string.screensaver_preview, () -> {
-            if (count == 0) Toast.makeText(this, R.string.screensaver_no_videos, Toast.LENGTH_LONG).show();
-            else startActivity(new Intent(this, ScreensaverActivity.class));
-        });
         button(R.string.screensaver_refresh, this::refresh);
-        button(R.string.screensaver_remove, () -> new AlertDialog.Builder(this)
-                .setMessage(R.string.screensaver_remove_confirm)
-                .setPositiveButton(android.R.string.ok, (dialog, which) -> perform(() -> ScreensaverStore.removeImported(this)))
+        button(R.string.screensaver_folder_unbind, () -> new AlertDialog.Builder(this)
+                .setMessage(R.string.screensaver_folder_unbind_confirm)
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> perform(() -> ScreensaverStore.unbind(this)))
                 .setNegativeButton(android.R.string.cancel, null).show());
-        File external = getExternalFilesDir(null);
-        TextView help = text(getString(R.string.screensaver_settings_hint,
-                external == null ? "—" : new File(external, "screensaver").getAbsolutePath()), 12);
-        help.setPadding(0, dp(18), 0, 0);
-        help.setTextColor(0xAAFFFFFF);
-        panel.addView(help, new LinearLayout.LayoutParams(-1, -2));
-        importButton.requestFocus();
+        folderButton.requestFocus();
     }
 
-    @Override protected void onResume() { super.onResume(); refresh(); }
+    @Override protected void onResume() { super.onResume(); updateVolume(); refresh(); }
 
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
 
@@ -117,6 +108,30 @@ public final class ScreensaverSettingsActivity extends Activity {
         return button;
     }
 
+    private void updateVolume() {
+        int percent = ScreensaverRules.clampVolumePercent(
+                preferences.getInt(ScreensaverStore.VOLUME_KEY, ScreensaverRules.DEFAULT_VOLUME_PERCENT));
+        volume.setText(getString(R.string.screensaver_volume, percent));
+    }
+
+    private void chooseVolume() {
+        int current = ScreensaverRules.clampVolumePercent(
+                preferences.getInt(ScreensaverStore.VOLUME_KEY, ScreensaverRules.DEFAULT_VOLUME_PERCENT));
+        String[] labels = new String[ScreensaverRules.VOLUME_PERCENTS.length];
+        int checked = labels.length - 1;
+        for (int i = 0; i < labels.length; i++) {
+            int percent = ScreensaverRules.VOLUME_PERCENTS[i];
+            labels[i] = getString(R.string.screensaver_volume_option, percent);
+            if (percent == current) checked = i;
+        }
+        new AlertDialog.Builder(this).setTitle(R.string.screensaver_volume_title)
+                .setSingleChoiceItems(labels, checked, (dialog, index) -> {
+                    preferences.edit().putInt(ScreensaverStore.VOLUME_KEY, ScreensaverRules.VOLUME_PERCENTS[index]).apply();
+                    updateVolume();
+                    dialog.dismiss();
+                }).setNegativeButton(android.R.string.cancel, null).show();
+    }
+
     private void updateTimeout() {
         int minutes = preferences.getInt("timeout_minutes", 10);
         timeout.setText(minutes <= 0 ? getString(R.string.screensaver_timeout_off)
@@ -140,28 +155,77 @@ public final class ScreensaverSettingsActivity extends Activity {
     }
 
     private void pick() {
-        for (String action : new String[]{Intent.ACTION_OPEN_DOCUMENT, Intent.ACTION_GET_CONTENT}) {
-            try {
-                startActivityForResult(new Intent(action).setType("video/*").addCategory(Intent.CATEGORY_OPENABLE)
-                        .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true), PICK);
-                return;
-            } catch (ActivityNotFoundException | SecurityException unavailable) { /* Manual local-directory fallback. */ }
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                .putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+        String saved = preferences.getString(ScreensaverStore.FOLDER_KEY, "");
+        if (saved.startsWith("content:")) intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.parse(saved));
+        ResolveInfo resolver = getPackageManager().resolveActivity(intent, 0);
+        if (resolver != null && resolver.activityInfo.packageName.contains("frameworkpackagestubs")) {
+            pickLibrary();
+            return;
         }
-        Toast.makeText(this, R.string.screensaver_no_picker, Toast.LENGTH_LONG).show();
+        try { startActivityForResult(intent, PICK); }
+        catch (ActivityNotFoundException | SecurityException unavailable) { pickLibrary(); }
     }
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (request != PICK || result != RESULT_OK || data == null || busy) return;
-        LinkedHashSet<Uri> sources = new LinkedHashSet<>();
-        if (data.getClipData() != null) {
-            if (data.getClipData().getItemCount() > ScreensaverRules.MAX_VIDEOS) {
-                Toast.makeText(this, R.string.screensaver_import_failed, Toast.LENGTH_LONG).show();
-                return;
+        if (request != PICK || result != RESULT_OK || data == null || data.getData() == null || busy) return;
+        bind(data.getData(), data.getFlags());
+    }
+
+    private String videoPermission() {
+        return Build.VERSION.SDK_INT >= 33 ? android.Manifest.permission.READ_MEDIA_VIDEO : android.Manifest.permission.READ_EXTERNAL_STORAGE;
+    }
+
+    private void pickLibrary() {
+        if (checkSelfPermission(videoPermission()) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{videoPermission()}, VIDEO_PERMISSION);
+            return;
+        }
+        if (busy || closed) return;
+        setBusy(true);
+        worker.execute(() -> {
+            List<ScreensaverFolders.Folder> folders = new ArrayList<>();
+            boolean available = true;
+            try { folders = ScreensaverFolders.list(getApplicationContext()); }
+            catch (IOException | RuntimeException failure) {
+                available = false;
+                android.util.Log.w("TvHome.Screensaver", "Cannot list video folders", failure);
             }
-            for (int i = 0; i < data.getClipData().getItemCount(); i++) sources.add(data.getClipData().getItemAt(i).getUri());
-        } else if (data.getData() != null) sources.add(data.getData());
-        perform(() -> ScreensaverStore.importVideos(getApplicationContext(), new ArrayList<>(sources), () -> closed));
+            List<ScreensaverFolders.Folder> result = folders;
+            boolean loaded = available;
+            runOnUiThread(() -> {
+                if (closed) return;
+                setBusy(false);
+                List<String> labels = new ArrayList<>();
+                for (ScreensaverFolders.Folder folder : result)
+                    labels.add(getString(R.string.screensaver_folder_option, folder.name, folder.count));
+                labels.add(getString(R.string.screensaver_local_folder));
+                new AlertDialog.Builder(this).setTitle(loaded && !result.isEmpty()
+                                ? R.string.screensaver_folder_choose : R.string.screensaver_folder_library_empty)
+                        .setItems(labels.toArray(new String[0]), (dialog, index) -> {
+                            if (index < result.size()) bind(result.get(index).uri, 0);
+                            else perform(() -> {
+                                File local = ScreensaverStore.localFolder(this);
+                                if (!local.isDirectory() && !local.mkdirs()) throw new IOException("Cannot create local folder");
+                                ScreensaverStore.bind(this, Uri.fromFile(local), 0, () -> closed);
+                            });
+                        }).setNegativeButton(android.R.string.cancel, null).show();
+            });
+        });
+    }
+
+    @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(request, permissions, results);
+        if (request != VIDEO_PERMISSION) return;
+        if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) pickLibrary();
+        else Toast.makeText(this, R.string.screensaver_folder_permission, Toast.LENGTH_LONG).show();
+    }
+
+    private void bind(Uri folder, int flags) {
+        perform(() -> ScreensaverStore.bind(getApplicationContext(), folder, flags, () -> closed));
     }
 
     private void setBusy(boolean value) {
@@ -177,20 +241,20 @@ public final class ScreensaverSettingsActivity extends Activity {
         if (busy || closed) return;
         setBusy(true);
         worker.execute(() -> {
-            int size = 0;
-            try {
-                ScreensaverStore.cleanAbandonedImports(getApplicationContext());
-                File external = getExternalFilesDir(null);
-                if (external != null) new File(external, "screensaver").mkdirs();
-                size = ScreensaverStore.videos(this).size();
-            } catch (RuntimeException failure) { android.util.Log.w("TvHome.Screensaver", "Cannot refresh videos", failure); }
-            int loaded = size;
+            ScreensaverStore.Library library = null;
+            try { library = ScreensaverStore.scan(getApplicationContext()); }
+            catch (IOException | RuntimeException failure) { android.util.Log.w("TvHome.Screensaver", "Cannot refresh videos", failure); }
+            ScreensaverStore.Library loaded = library;
             runOnUiThread(() -> {
                 if (closed) return;
-                count = loaded;
+                count = loaded == null ? 0 : loaded.videos.size();
                 preferences.edit().putInt("video_count", count).apply();
                 setBusy(false);
-                status.setText(getString(R.string.screensaver_video_count, count));
+                String folder = loaded == null ? preferences.getString("folder_label", "") : loaded.folder;
+                folderStatus.setText(folder.isEmpty() ? getString(R.string.screensaver_folder_none) : folder);
+                folderStatus.setContentDescription(folderStatus.getText());
+                status.setText(loaded == null ? getString(R.string.screensaver_folder_unavailable)
+                        : getString(loaded.limited ? R.string.screensaver_folder_limited : R.string.screensaver_video_count, count));
             });
         });
     }
@@ -201,15 +265,21 @@ public final class ScreensaverSettingsActivity extends Activity {
         if (busy || closed) return;
         setBusy(true);
         worker.execute(() -> {
-            boolean success = false;
-            try { action.run(); success = true; }
-            catch (IOException | RuntimeException failure) { android.util.Log.w("TvHome.Screensaver", "Video update failed", failure); }
-            boolean applied = success;
+            int error = 0;
+            try { action.run(); }
+            catch (ScreensaverStore.EmptyFolderException failure) { error = R.string.screensaver_folder_empty; }
+            catch (SecurityException failure) { error = R.string.screensaver_folder_permission; }
+            catch (IOException | RuntimeException failure) {
+                error = R.string.screensaver_folder_unavailable;
+                android.util.Log.w("TvHome.Screensaver", "Folder update failed", failure);
+            }
+            int failure = error;
             runOnUiThread(() -> {
                 if (closed) return;
                 setBusy(false);
-                Toast.makeText(this, applied ? R.string.screensaver_imported : R.string.screensaver_import_failed, Toast.LENGTH_LONG).show();
-                refresh();
+                Toast.makeText(this, failure == 0 ? R.string.screensaver_folder_updated : failure, Toast.LENGTH_LONG).show();
+                if (failure == 0) refresh();
+                else status.setText(failure);
             });
         });
     }

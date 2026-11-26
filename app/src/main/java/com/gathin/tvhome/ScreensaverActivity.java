@@ -22,7 +22,6 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -40,7 +39,7 @@ public final class ScreensaverActivity extends Activity implements SurfaceHolder
     private final ExecutorService loader = Executors.newSingleThreadExecutor();
     private final ScreensaverRules.DoubleBack back = new ScreensaverRules.DoubleBack();
     private final Set<String> failed = new HashSet<>();
-    private List<File> videos = new ArrayList<>();
+    private List<ScreensaverVideo> videos = new ArrayList<>();
     private FrameLayout root;
     private SurfaceView surface;
     private TextView status, hint;
@@ -77,22 +76,28 @@ public final class ScreensaverActivity extends Activity implements SurfaceHolder
         hint.setBackgroundColor(0x99000000);
         root.addView(hint, new FrameLayout.LayoutParams(-1, dp(48), Gravity.BOTTOM));
         loader.execute(() -> {
-            List<File> loaded;
-            try { loaded = ScreensaverStore.videos(getApplicationContext()); }
-            catch (RuntimeException failure) {
+            List<ScreensaverVideo> loaded;
+            boolean unavailable = false;
+            try { loaded = ScreensaverStore.scan(getApplicationContext()).videos; }
+            catch (IOException | RuntimeException failure) {
                 Log.w("TvHome.Screensaver", "Cannot list videos", failure);
                 loaded = new ArrayList<>();
+                unavailable = true;
             }
-            List<File> result = loaded;
+            List<ScreensaverVideo> result = loaded;
+            boolean missing = unavailable;
             handler.post(() -> {
                 if (closed || isFinishing()) return;
                 videos = result;
                 preferences.edit().putInt("video_count", videos.size()).apply();
                 String previous = preferences.getString("selected", "");
-                for (int i = 0; i < videos.size(); i++) if (videos.get(i).getAbsolutePath().equals(previous)) selected = i;
+                for (int i = 0; i < videos.size(); i++) {
+                    ScreensaverVideo video = videos.get(i);
+                    if (video.key.equals(previous) || "file".equals(video.uri.getScheme()) && previous.equals(video.uri.getPath())) selected = i;
+                }
                 if (videos.isEmpty()) {
                     if (getIntent().getBooleanExtra("automatic", false)) { finish(); return; }
-                    status.setText(R.string.screensaver_no_videos);
+                    status.setText(missing ? R.string.screensaver_folder_unavailable : R.string.screensaver_no_videos);
                 }
                 else maybePlay();
             });
@@ -128,8 +133,8 @@ public final class ScreensaverActivity extends Activity implements SurfaceHolder
         if (!active || !surfaceReady || closed || videos.isEmpty()) return;
         releasePlayer();
         selected = Math.max(0, Math.min(videos.size() - 1, index));
-        File video = videos.get(selected);
-        if (manual) failed.remove(video.getAbsolutePath());
+        ScreensaverVideo video = videos.get(selected);
+        if (manual) failed.remove(video.key);
         status.setText(R.string.screensaver_loading);
         status.setVisibility(View.VISIBLE);
         try {
@@ -138,8 +143,10 @@ public final class ScreensaverActivity extends Activity implements SurfaceHolder
             AudioAttributes attributes = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build();
             current.setAudioAttributes(attributes);
-            boolean audible = !preferences.getBoolean("muted", true) && requestAudio(attributes);
-            current.setVolume(audible ? 1f : 0f, audible ? 1f : 0f);
+            float volume = configuredVolume();
+            boolean audible = volume > 0f && requestAudio(attributes);
+            float applied = audible ? volume : 0f;
+            current.setVolume(applied, applied);
             current.setDisplay(surface.getHolder());
             current.setLooping(true);
             current.setOnVideoSizeChangedListener((p, width, height) -> {
@@ -155,18 +162,23 @@ public final class ScreensaverActivity extends Activity implements SurfaceHolder
                 try {
                     if (!audioPaused) p.start();
                     status.setVisibility(View.GONE);
-                    preferences.edit().putString("selected", video.getAbsolutePath()).apply();
+                    preferences.edit().putString("selected", video.key).apply();
                 } catch (IllegalStateException failure) { failVideo(p); }
             });
             current.setOnErrorListener((p, what, extra) -> { failVideo(p); return true; });
-            current.setDataSource(video.getAbsolutePath());
+            current.setDataSource(this, video.uri);
             current.prepareAsync();
             prepareTimeout = () -> failVideo(current);
             handler.postDelayed(prepareTimeout, 15_000);
         } catch (IOException | RuntimeException failure) {
-            Log.w("TvHome.Screensaver", "Cannot play " + video.getName(), failure);
+            Log.w("TvHome.Screensaver", "Cannot play " + video.name, failure);
             failVideo(player);
         }
+    }
+
+    private float configuredVolume() {
+        return ScreensaverRules.playerVolume(
+                preferences.getInt(ScreensaverStore.VOLUME_KEY, ScreensaverRules.DEFAULT_VOLUME_PERCENT));
     }
 
     private boolean requestAudio(AudioAttributes attributes) {
@@ -181,10 +193,14 @@ public final class ScreensaverActivity extends Activity implements SurfaceHolder
                             audioPaused = true;
                             if (prepared) player.pause();
                         }
-                        else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) player.setVolume(0.15f, 0.15f);
+                        else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) {
+                            float ducked = configuredVolume() * 0.15f;
+                            player.setVolume(ducked, ducked);
+                        }
                         else if (change == AudioManager.AUDIOFOCUS_GAIN) {
                             audioPaused = false;
-                            player.setVolume(1f, 1f);
+                            float volume = configuredVolume();
+                            player.setVolume(volume, volume);
                             if (prepared) player.start();
                         }
                     } catch (IllegalStateException failure) { finish(); }
@@ -195,12 +211,14 @@ public final class ScreensaverActivity extends Activity implements SurfaceHolder
 
     private void failVideo(MediaPlayer current) {
         if (current != player || !active || closed || videos.isEmpty()) return;
-        failed.add(videos.get(selected).getAbsolutePath());
+        hideChooser();
+        failed.add(videos.get(selected).key);
         releasePlayer();
         int generation = playbackGeneration;
         for (int step = 1; step <= videos.size(); step++) {
             int next = (selected + step) % videos.size();
-            if (!failed.contains(videos.get(next).getAbsolutePath())) {
+            if (!failed.contains(videos.get(next).key)) {
+                Toast.makeText(this, R.string.screensaver_skipping, Toast.LENGTH_SHORT).show();
                 handler.post(() -> { if (generation == playbackGeneration && active) play(next, false); });
                 return;
             }
@@ -227,12 +245,28 @@ public final class ScreensaverActivity extends Activity implements SurfaceHolder
         hint.setVisibility(View.GONE);
         if (coverLoader == null) coverLoader = new ThreadPoolExecutor(1, 1, 0L,
                 TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
-        chooser = new ScreensaverChooser(this, videos, selected, coverLoader, this::deferChooserHide, index -> {
-            play(index, true);
+        int currentVolume = ScreensaverRules.clampVolumePercent(
+                preferences.getInt(ScreensaverStore.VOLUME_KEY, ScreensaverRules.DEFAULT_VOLUME_PERCENT));
+        chooser = new ScreensaverChooser(this, videos, selected, currentVolume, coverLoader, this::deferChooserHide, index -> {
+            if (ScreensaverRules.shouldRestartVideo(index, selected, player != null && prepared)) play(index, true);
             hideChooser();
-        });
-        root.addView(chooser.view, new FrameLayout.LayoutParams(-1, dp(146), Gravity.BOTTOM));
+        }, this::setVolumePercent);
+        root.addView(chooser.view, new FrameLayout.LayoutParams(-1, dp(264), Gravity.BOTTOM));
         deferChooserHide();
+    }
+
+    private void setVolumePercent(int percent) {
+        int clamped = ScreensaverRules.clampVolumePercent(percent);
+        preferences.edit().putInt(ScreensaverStore.VOLUME_KEY, clamped).apply();
+        if (player == null) return;
+        float volume = configuredVolume();
+        if (volume > 0f && !focusGranted) {
+            AudioAttributes attributes = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build();
+            if (!requestAudio(attributes)) volume = 0f;
+        }
+        try { player.setVolume(volume, volume); }
+        catch (IllegalStateException ignored) { }
     }
 
     private void deferChooserHide() { handler.removeCallbacks(hideChooser); handler.postDelayed(hideChooser, 8000); }
@@ -246,8 +280,12 @@ public final class ScreensaverActivity extends Activity implements SurfaceHolder
     }
 
     private void back() {
+        if (chooser != null) {
+            hideChooser();
+            back.reset();
+            return;
+        }
         if (back.press(SystemClock.uptimeMillis())) { finish(); return; }
-        hideChooser();
         Toast.makeText(this, R.string.screensaver_back_again, Toast.LENGTH_SHORT).show();
     }
 
@@ -259,8 +297,15 @@ public final class ScreensaverActivity extends Activity implements SurfaceHolder
         }
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             back.reset();
-            if (code == KeyEvent.KEYCODE_DPAD_DOWN) { if (event.getRepeatCount() == 0) showChooser(); return true; }
-            if (code == KeyEvent.KEYCODE_DPAD_UP) { hideChooser(); return true; }
+            if (code == KeyEvent.KEYCODE_DPAD_DOWN) {
+                if (chooser != null) chooser.down();
+                else if (event.getRepeatCount() == 0) showChooser();
+                return true;
+            }
+            if (code == KeyEvent.KEYCODE_DPAD_UP) {
+                if (chooser == null || !chooser.up()) hideChooser();
+                return true;
+            }
             if (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 if (chooser != null) chooser.move(code == KeyEvent.KEYCODE_DPAD_LEFT ? -1 : 1);
                 return true;

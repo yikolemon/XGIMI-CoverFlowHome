@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="home_load_failed">Unable to load Home. Press OK to retry.</string>
   <string name="app_name">XGIMI Home</string>
@@ -36,22 +36,33 @@
   <string name="wallpaper_applied">Wallpaper updated.</string>
     <string name="screensaver_title">Video screensaver</string>
     <string name="screensaver_loading">Loading local videos…</string>
-    <string name="screensaver_no_videos">No videos. Import videos in wallpaper settings → Video screensaver.</string>
+    <string name="screensaver_no_videos">No videos available. Choose or refresh a video folder in wallpaper settings → Video screensaver.</string>
     <string name="screensaver_play_hint">Down: choose video · Double Back: exit</string>
     <string name="screensaver_back_again">Press Back again quickly to exit</string>
     <string name="screensaver_play_failed">These videos could not be played. Down: choose · Double Back: exit</string>
-    <string name="screensaver_import">Import local videos (replace collection)</string>
+    <string name="screensaver_folder_choose">Choose video folder</string>
+    <string name="screensaver_volume">Screensaver volume: %1$d%%</string>
+    <string name="screensaver_volume_title">Screensaver volume</string>
+    <string name="screensaver_volume_option">%1$d%%</string>
     <string name="screensaver_timeout_off">Auto screensaver: off</string>
     <string name="screensaver_timeout_minutes">Auto screensaver idle timeout (min): %1$d</string>
     <string name="screensaver_timeout_title">Desktop idle time</string>
-    <string name="screensaver_mute">Mute video sound</string>
-    <string name="screensaver_preview">Start screensaver now</string>
     <string name="screensaver_refresh">Refresh local video directory</string>
-    <string name="screensaver_remove">Remove imported collection</string>
-    <string name="screensaver_remove_confirm">Remove imported videos? Files in the external screensaver directory will not be deleted.</string>
-    <string name="screensaver_settings_hint">Home: focus the top-right button, then press Up three times within 2 seconds.\nDown shows video covers; double Back exits. Muted looping by default.\nUp to 20 videos, 512 MiB each, 2 GiB per import. 1080p H.264 MP4 recommended.\nWithout a file picker, copy videos here and refresh:\n%1$s</string>
-    <string name="screensaver_no_picker">No video file picker. Copy videos to the directory shown below, then refresh.</string>
-    <string name="screensaver_import_failed">Video update failed. Check file type, size, free space and access. Previous videos were kept.</string>
-    <string name="screensaver_imported">Video collection updated</string>
+    <string name="screensaver_folder_unbind">Disconnect video folder</string>
+    <string name="screensaver_folder_unbind_confirm">Disconnect this folder? No video files will be deleted.</string>
+    <string name="screensaver_folder_none">No video folder connected</string>
+    <string name="screensaver_folder_updated">Video folder updated · Original files unchanged</string>
+    <string name="screensaver_folder_empty">No supported videos directly inside this folder. Previous folder kept.</string>
+    <string name="screensaver_folder_unavailable">Folder unavailable. Check the drive or choose the folder again.</string>
+    <string name="screensaver_folder_permission">Video access unavailable. Allow video access or authorize the folder again.</string>
+    <string name="screensaver_folder_option">%1$s · %2$d</string>
+    <string name="screensaver_folder_library_empty">No indexed video folders · App folder available</string>
+    <string name="screensaver_local_folder">Use app video folder</string>
+    <string name="screensaver_folder_limited">Showing first %1$d videos · Sorted by name</string>
+    <string name="screensaver_skipping">Video unavailable · Trying the next one</string>
+    <string name="screensaver_playing">Playing</string>
+    <string name="screensaver_choose_to_play">OK to play</string>
+    <string name="screensaver_chooser_keys">← → Browse    OK Play    ↑ Hide</string>
+    <string name="screensaver_chooser_position">%1$d / %2$d · %3$s</string>
     <string name="screensaver_video_count">Available local videos: %1$d</string>
 </resources>

@@ -1,8 +1,8 @@
 package com.gathin.tvhome;
 
-import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.BitmapShader;
 import android.graphics.Camera;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -16,11 +16,11 @@ import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.Choreographer;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.SoundEffectConstants;
 import android.view.View;
-import android.view.animation.DecelerateInterpolator;
 import android.util.LruCache;
 import android.util.Log;
 
@@ -45,16 +45,21 @@ final class CoverFlowView extends View {
         }
     }
 
+    private static final float GLIDE_DURATION_SEC = 0.34f;
+    private static final long REPEAT_INTERVAL_MS = 350L;
+    private static final Typeface POSTER_LABEL_TYPEFACE = Typeface.create("sans-serif-medium", Typeface.NORMAL);
     private final List<App> apps = new ArrayList<>();
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final Paint frostPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final Camera camera = new Camera();
     private final Matrix matrix = new Matrix();
+    private final Matrix frostMatrix = new Matrix();
     private final RectF rect = new RectF();
-    private final Path clip = new Path();
+    private final RectF frostBounds = new RectF();
     private final RectF backdrop = new RectF();
     private final Typeface textTypeface = Typeface.create("sans-serif", Typeface.NORMAL);
-    // Cache is UI-thread-only: six posters (1.44 MB), plus at most one five-poster worker batch.
-    private final LruCache<String, Bitmap> posters = new LruCache<>(6);
+    // Cache is UI-thread-only: 16 posters (~3.8 MB) keeps all 7 visible slots and neighbours hot.
+    private final LruCache<String, Bitmap> posters = new LruCache<>(16);
     private final Context artworkContext;
     private final Handler artworkHandler = new Handler(Looper.getMainLooper());
     private final ThreadPoolExecutor artworkLoader = new ThreadPoolExecutor(1, 1, 0L,
@@ -64,22 +69,25 @@ final class CoverFlowView extends View {
     private boolean artworkPaused;
     private boolean artworkReady = true;
     private Runnable onArtworkReady;
-    private Shader sheen;
     private final Consumer<String> open;
     private final Runnable up;
     private final boolean animations;
     private final float density;
     private final String instructions;
     private int selection;
-    private float position;
-    private ValueAnimator animator;
+    private float position, velocity, startPosition, startVelocity;
+    private boolean animating;
+    private long segmentStartNanos, lastFrameNanos;
+    private final float[] glideOut = new float[2];
     private Bitmap frost;
+    private BitmapShader frostShader;
     private float cardWidth, cardHeight;
     private final int[] drawingOrder = new int[7];
     private final float[] distances = new float[7];
     private String counter = "";
     private long lastMoveTime;
     private boolean loading;
+    private final Choreographer.FrameCallback frameCallback = this::stepGlide;
 
     void setLoading(boolean value) {
         loading = value;
@@ -136,7 +144,21 @@ final class CoverFlowView extends View {
     }
 
     void setFrost(Bitmap bitmap) {
-        frost = bitmap;
+        if (bitmap == null || bitmap.isRecycled()) {
+            frost = null;
+            frostShader = null;
+            frostPaint.setShader(null);
+        } else {
+            // Pre-bake the translucent glass tint onto the 192x108 frost bitmap to eliminate a fill pass per card.
+            Bitmap tinted = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(tinted);
+            canvas.drawBitmap(bitmap, 0, 0, null);
+            canvas.drawColor(0x30FFFFFF);
+            frost = tinted;
+            frostBounds.set(0, 0, tinted.getWidth(), tinted.getHeight());
+            frostShader = new BitmapShader(tinted, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+            frostPaint.setShader(frostShader);
+        }
         invalidate();
     }
 
@@ -150,30 +172,58 @@ final class CoverFlowView extends View {
 
     private void move(int step) {
         if (apps.size() <= 1) return;
-        if (animator != null) animator.cancel();
+        if (animating && segmentStartNanos != 0L && lastFrameNanos >= segmentStartNanos) {
+            float elapsed = (lastFrameNanos - segmentStartNanos) / 1_000_000_000f;
+            if (CoverFlowMath.stepHermite(startPosition, startVelocity, selection, elapsed, GLIDE_DURATION_SEC, glideOut) != 0L) {
+                position = glideOut[0];
+                velocity = glideOut[1];
+            } else {
+                position = selection;
+                velocity = 0f;
+            }
+        }
         selection += step;
         updateDescription();
         warmPosters();
         if (!animations) {
             position = selection;
+            velocity = 0f;
+            animating = false;
             invalidate();
             return;
         }
-        animator = ValueAnimator.ofFloat(position, selection);
-        animator.setDuration(260);
-        animator.setInterpolator(new DecelerateInterpolator(1.5f));
-        animator.addUpdateListener(value -> {
-            position = (float) value.getAnimatedValue();
-            invalidate();
-        });
-        animator.start();
+        startPosition = position;
+        startVelocity = velocity;
+        segmentStartNanos = animating && lastFrameNanos != 0L ? lastFrameNanos : 0L;
+        if (!animating) {
+            animating = true;
+            lastFrameNanos = 0L;
+            Choreographer.getInstance().postFrameCallback(frameCallback);
+        }
         playSoundEffect(step < 0 ? SoundEffectConstants.NAVIGATION_LEFT : SoundEffectConstants.NAVIGATION_RIGHT);
+    }
+
+    private void stepGlide(long frameTimeNanos) {
+        if (!animating || released) return;
+        if (segmentStartNanos == 0L) segmentStartNanos = frameTimeNanos - 16_666_667L;
+        lastFrameNanos = frameTimeNanos;
+        float elapsed = Math.max(0f, (frameTimeNanos - segmentStartNanos) / 1_000_000_000f);
+        boolean running = CoverFlowMath.stepHermite(
+                startPosition, startVelocity, selection, elapsed, GLIDE_DURATION_SEC, glideOut) != 0L;
+        position = glideOut[0];
+        velocity = glideOut[1];
+        if (running) {
+            Choreographer.getInstance().postFrameCallback(frameCallback);
+        } else {
+            animating = false;
+        }
+        invalidate();
     }
 
     @Override public boolean onKeyDown(int code, KeyEvent event) {
         if (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT) {
-            // Bound the animation queue when a remote sends repeats unusually quickly.
-            if (event.getRepeatCount() == 0 || event.getEventTime() - lastMoveTime >= 100L) {
+            // Pace held repeats (~3 cards/sec) so each passing card stays readable.
+            if (event.getRepeatCount() == 0 || event.getEventTime() - lastMoveTime >= REPEAT_INTERVAL_MS) {
                 move(code == KeyEvent.KEYCODE_DPAD_LEFT ? -1 : 1);
                 lastMoveTime = event.getEventTime();
             }
@@ -221,8 +271,6 @@ final class CoverFlowView extends View {
     @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         cardHeight = Math.min(dp(286), h * 0.68f);
         cardWidth = cardHeight * 2f / 3f;
-        sheen = new LinearGradient(0, 0, cardWidth, cardHeight,
-                new int[]{0x28FFFFFF, 0x04FFFFFF, 0x14000000}, new float[]{0, 0.48f, 1}, Shader.TileMode.CLAMP);
     }
 
     @Override protected void onDraw(Canvas canvas) {
@@ -233,6 +281,8 @@ final class CoverFlowView extends View {
             if (!loading) text(canvas, getContext().getString(R.string.cover_flow_empty), centerX, centerY, 18, 0xCCFFFFFF);
             return;
         }
+        View root = getRootView();
+        int rootHeight = root != null ? root.getHeight() : getHeight();
         int slots = apps.size() == 1 ? 1 : 7;
         int first = apps.size() == 1 ? selection : (int) Math.floor(position) - 3;
         for (int i = 0; i < slots; i++) {
@@ -254,7 +304,7 @@ final class CoverFlowView extends View {
             int index = CoverFlowMath.index(first + slot, apps.size());
             float scale = CoverFlowMath.scale(distance);
             float x = centerX + CoverFlowMath.offset(distance, cardWidth);
-            drawCard(canvas, apps.get(index), distance, x, centerY, scale);
+            drawCard(canvas, apps.get(index), distance, x, centerY, scale, rootHeight);
         }
 
         float baseline = centerY + cardHeight / 2 + dp(44);
@@ -269,9 +319,10 @@ final class CoverFlowView extends View {
         if (apps.size() > 12) text(canvas, counter, centerX, baseline, 12, 0xAAFFFFFF);
     }
 
-    private void drawCard(Canvas canvas, App app, float distance, float x, float y, float scale) {
+    private void drawCard(Canvas canvas, App app, float distance, float x, float y, float scale, int rootHeight) {
         float proximity = 1f - Math.min(Math.abs(distance), 2f) / 2f;
         float w = cardWidth, h = cardHeight;
+        float radius = dp(15);
         float edgeFade = Math.min(1f, (2.85f - Math.abs(distance)) / 0.85f);
         paint.setShader(null);
         paint.setAlpha(255);
@@ -288,33 +339,32 @@ final class CoverFlowView extends View {
         canvas.concat(matrix);
         int alpha = Math.round(255 * (0.58f + proximity * 0.42f) * edgeFade);
         rect.set(0, 0, w, h);
-        clip.reset();
-        clip.addRoundRect(rect, dp(15), dp(15), Path.Direction.CW);
-        canvas.clipPath(clip);
-        if (frost != null && !frost.isRecycled()) {
-            // Sample the matching area of the softened wallpaper under the glass panel.
+        if (frost != null && frostShader != null && !frost.isRecycled()) {
+            backdrop.set(w / 2 - x, h / 2 - y - getTop(),
+                    w / 2 - x + getWidth(), h / 2 - y - getTop() + rootHeight);
+            frostMatrix.setRectToRect(frostBounds, backdrop, Matrix.ScaleToFit.FILL);
+            frostShader.setLocalMatrix(frostMatrix);
+            frostPaint.setAlpha(alpha);
+            canvas.drawRoundRect(rect, radius, radius, frostPaint);
+        } else {
+            paint.setColor(0x30FFFFFF);
+            paint.setAlpha(0x30 * alpha / 255);
+            canvas.drawRoundRect(rect, radius, radius, paint);
+        }
+        Bitmap artwork = posters.get(app.artworkKey);
+        if (artwork != null) {
             paint.setColor(Color.WHITE);
             paint.setAlpha(alpha);
-            backdrop.set(w / 2 - x, h / 2 - y - getTop(),
-                    w / 2 - x + getWidth(), h / 2 - y - getTop() + getRootView().getHeight());
-            canvas.drawBitmap(frost, null, backdrop, paint);
+            canvas.drawBitmap(artwork, null, rect, paint);
         }
-        paint.setColor(0x30FFFFFF);
-        paint.setAlpha(0x30 * alpha / 255);
-        canvas.drawRect(rect, paint);
-        paint.setColor(Color.WHITE);
-        paint.setAlpha(alpha);
-        Bitmap artwork = posters.get(app.artworkKey);
-        if (artwork != null) canvas.drawBitmap(artwork, null, rect, paint);
-        paint.setShader(sheen);
-        canvas.drawRect(rect, paint);
-        paint.setShader(null);
+        float focusBlend = hasFocus() ? Math.max(0f, Math.min(1f, (proximity - 0.6f) / 0.4f)) : 0f;
+        focusBlend = focusBlend * focusBlend * (3f - 2f * focusBlend);
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(dp(hasFocus() && proximity > 0.95f ? 1.6f : 0.8f));
-        paint.setColor(hasFocus() && proximity > 0.95f ? 0xE6FFFFFF : 0x66FFFFFF);
-        paint.setAlpha(paint.getAlpha() * alpha / 255);
+        paint.setStrokeWidth(dp(0.8f + 0.9f * focusBlend));
+        paint.setColor(Color.WHITE);
+        paint.setAlpha(Math.round((0x66 + (0xE6 - 0x66) * focusBlend) * alpha / 255f));
         rect.inset(dp(0.8f), dp(0.8f));
-        canvas.drawRoundRect(rect, dp(15), dp(15), paint);
+        canvas.drawRoundRect(rect, radius, radius, paint);
         paint.setStyle(Paint.Style.FILL);
         paint.setAlpha(255);
         canvas.restore();
@@ -335,6 +385,9 @@ final class CoverFlowView extends View {
         int w = 300, h = 450;
         Bitmap bitmap = Bitmap.createBitmap(200, 300, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
+        Path cornerClip = new Path();
+        cornerClip.addRoundRect(new RectF(0, 0, 200, 300), 15.7f, 15.7f, Path.Direction.CW);
+        canvas.clipPath(cornerClip);
         canvas.scale(2f / 3f, 2f / 3f);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         int[] colors = {0x99526DAD, 0x99D47749, 0x99BD9469, 0x997E54B3};
@@ -353,9 +406,7 @@ final class CoverFlowView extends View {
         p.setColor(0x66FFFFFF);
         canvas.drawRect(26, 53, 49, 55, p);
 
-        // Preserve the app's actual icon proportions and adaptive-icon rendering.
-        p.setColor(0x14FFFFFF);
-        canvas.drawRoundRect(new RectF(68, 130, 232, 294), 30, 30, p);
+        // Draw icons directly onto the frosted card without an extra halo tray, rounding square/adaptive edges.
         Drawable icon;
         try { icon = context.getPackageManager().getApplicationIcon(app.pkg); }
         catch (android.content.pm.PackageManager.NameNotFoundException | RuntimeException unavailable) {
@@ -364,12 +415,17 @@ final class CoverFlowView extends View {
         if (icon != null) {
             icon = icon.mutate();
             android.graphics.Rect oldBounds = icon.copyBounds();
+            Path iconClip = new Path();
+            iconClip.addRoundRect(new RectF(76, 138, 224, 286), 28, 28, Path.Direction.CW);
+            canvas.save();
+            canvas.clipPath(iconClip);
             icon.setBounds(76, 138, 224, 286);
             icon.draw(canvas);
+            canvas.restore();
             icon.setBounds(oldBounds);
         }
         p.setColor(Color.WHITE);
-        p.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        p.setTypeface(POSTER_LABEL_TYPEFACE);
         p.setTextSize(29);
         p.setTextAlign(Paint.Align.CENTER);
         String label = app.label;
@@ -378,12 +434,21 @@ final class CoverFlowView extends View {
             if (p.getTextSize() <= 16) break;
         }
         canvas.drawText(label, w / 2f, 365, p);
+        p.setShader(new LinearGradient(0, 0, w, h,
+                new int[]{0x28FFFFFF, 0x04FFFFFF, 0x14000000}, new float[]{0, 0.48f, 1}, Shader.TileMode.CLAMP));
+        canvas.drawRect(0, 0, w, h, p);
         return bitmap;
     }
 
     void stopAnimation() {
-        if (animator != null) animator.cancel();
+        animating = false;
+        Choreographer.getInstance().removeFrameCallback(frameCallback);
         position = selection;
+        startPosition = selection;
+        velocity = 0f;
+        startVelocity = 0f;
+        segmentStartNanos = 0L;
+        lastFrameNanos = 0L;
         invalidate();
     }
 
@@ -443,6 +508,8 @@ final class CoverFlowView extends View {
         artworkReady = false;
         posters.evictAll();
         frost = null;
+        frostShader = null;
+        frostPaint.setShader(null);
         // Do not recycle bitmaps still referenced by Android's render thread.
         invalidate();
     }

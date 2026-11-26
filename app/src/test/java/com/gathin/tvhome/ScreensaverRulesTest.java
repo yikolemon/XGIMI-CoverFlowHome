@@ -72,34 +72,38 @@ public class ScreensaverRulesTest {
         assertFalse(ScreensaverRules.videoName(null));
     }
 
-    @Test public void importBudgetIncludesExactBoundaries() {
-        assertTrue(ScreensaverRules.withinBudget(ScreensaverRules.MAX_VIDEO_BYTES,
-                ScreensaverRules.MAX_BATCH_BYTES, ScreensaverRules.RESERVED_BYTES));
-        assertFalse(ScreensaverRules.withinBudget(ScreensaverRules.MAX_VIDEO_BYTES + 1,
-                ScreensaverRules.MAX_BATCH_BYTES, ScreensaverRules.RESERVED_BYTES));
-        assertFalse(ScreensaverRules.withinBudget(1, ScreensaverRules.MAX_BATCH_BYTES + 1, ScreensaverRules.RESERVED_BYTES));
-        assertFalse(ScreensaverRules.withinBudget(1, 1, ScreensaverRules.RESERVED_BYTES - 1));
-        assertFalse(ScreensaverRules.withinBudget(0, 0, ScreensaverRules.RESERVED_BYTES));
-        assertFalse(ScreensaverRules.withinBudget(10, 9, ScreensaverRules.RESERVED_BYTES));
+    @Test public void chooserClampsAtBothEndsWithoutWrapping() {
+        assertEquals(0, ScreensaverRules.chooserIndex(0, -1, 3));
+        assertEquals(2, ScreensaverRules.chooserIndex(2, 1, 3));
+        assertEquals(1, ScreensaverRules.chooserIndex(0, 1, 3));
+        assertEquals(1, ScreensaverRules.chooserIndex(2, -1, 3));
     }
 
-    @Test public void importedNamesAreBoundedAndCannotEscapeDirectory() {
-        assertEquals("a_b_c.mp4", ScreensaverRules.importName("a/b\\c.mp4"));
-        assertEquals("sleep_video.mp4", ScreensaverRules.importName("sleep\nvideo.mp4"));
-        String longName = new String(new char[180]).replace('\0', 'a') + ".MP4";
-        String safe = ScreensaverRules.importName(longName);
-        assertTrue(safe.length() <= 100);
-        assertTrue(safe.endsWith(".MP4"));
-        assertTrue(ScreensaverRules.videoName(safe));
-        String chinese = ScreensaverRules.importName(new String(new char[100]).replace('\0', '雨') + ".mp4");
-        assertTrue(chinese.getBytes(java.nio.charset.StandardCharsets.UTF_8).length < 250);
+    @Test public void emptyAndSingleVideoChoosersStayAtZero() {
+        assertEquals(0, ScreensaverRules.chooserIndex(0, 1, 0));
+        assertEquals(0, ScreensaverRules.chooserIndex(0, -1, 1));
+        assertEquals(0, ScreensaverRules.chooserIndex(0, 1, 1));
     }
 
-    @Test(expected = IllegalArgumentException.class) public void missingImportNameIsRejected() {
-        ScreensaverRules.importName(null);
+    @Test public void chooserArithmeticDoesNotOverflow() {
+        assertEquals(19, ScreensaverRules.chooserIndex(19, Integer.MAX_VALUE, 20));
+        assertEquals(0, ScreensaverRules.chooserIndex(1, Integer.MIN_VALUE, 20));
     }
 
-    @Test(expected = IllegalArgumentException.class) public void longExtensionlessImportIsRejected() {
-        ScreensaverRules.importName(new String(new char[180]).replace('\0', 'a'));
+    @Test public void confirmingPlayingVideoDoesNotRestartButFailuresCanRetry() {
+        assertFalse(ScreensaverRules.shouldRestartVideo(1, 1, true));
+        assertTrue(ScreensaverRules.shouldRestartVideo(2, 1, true));
+        assertTrue(ScreensaverRules.shouldRestartVideo(1, 1, false));
+    }
+
+    @Test public void playerVolumeClampsPercent() {
+        assertEquals(1f, ScreensaverRules.playerVolume(100), 0.0001f);
+        assertEquals(0.4f, ScreensaverRules.playerVolume(40), 0.0001f);
+        assertEquals(0f, ScreensaverRules.playerVolume(0), 0.0001f);
+        assertEquals(1f, ScreensaverRules.playerVolume(150), 0.0001f);
+        assertEquals(0f, ScreensaverRules.playerVolume(-20), 0.0001f);
+        assertEquals(90, ScreensaverRules.adjustVolumePercent(100, -10));
+        assertEquals(0, ScreensaverRules.adjustVolumePercent(0, -10));
+        assertEquals(100, ScreensaverRules.adjustVolumePercent(100, 10));
     }
 }

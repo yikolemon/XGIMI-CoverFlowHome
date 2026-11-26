@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.os.Handler;
@@ -77,13 +79,10 @@ final class WallpaperPlayer {
         if (config.wallpaperEnabled && !files.isEmpty()) {
             root.addView(image, 0, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            // No shade layer at all when the theme doesn't dim: a full-screen view is overdraw on 1 GB TVs.
+            // Apply dim directly via ImageView ColorFilter so no second full-screen overdraw View is added.
             if (config.wallpaperDim > 0) {
-                View shade = new View(context);
-                shade.setBackgroundColor((config.wallpaperDim * 255 / 100) << 24);
-                shade.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-                root.addView(shade, 1, new FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                int dimAlpha = Math.max(0, Math.min(255, config.wallpaperDim * 255 / 100));
+                image.setColorFilter(Color.argb(dimAlpha, 0, 0, 0), PorterDuff.Mode.SRC_ATOP);
             }
             if (!asynchronousFirstImage) showFirst();
         }
@@ -136,6 +135,8 @@ final class WallpaperPlayer {
     }
 
     void setOnImageChanged(Runnable listener) { imageChanged = listener; }
+
+    boolean hasImage() { return !displayed.isEmpty() && image.getDrawable() != null; }
 
     boolean isReady() { return !displayed.isEmpty() || files.isEmpty(); }
 

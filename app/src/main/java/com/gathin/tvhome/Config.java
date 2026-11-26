@@ -100,7 +100,7 @@ final class Config {
             File wallpaper = new File(themeDir, "wallpaper.jpg");
             if (wallpapers.isEmpty() && wallpaper.isFile() && wallpaper.length() > 0) wallpapers.add(wallpaper);
         }
-        if (wallpapers.isEmpty() && rotationMinutes > 0) {
+        if (wallpapers.isEmpty()) {
             File bundled = new File(context.getFilesDir(), "bundled_wallpapers");
             copyBundledWallpapers(context, bundled);
             wallpapers.addAll(WallpaperRotation.images(bundled));
@@ -122,14 +122,18 @@ final class Config {
     private static JSONObject readJson(Context context) {
         File external = context.getExternalFilesDir(null);
         File override = external == null ? null : new File(external, "config.json");
-        try {
-            byte[] bytes;
-            if (override != null && override.isFile())
-                try (InputStream input = new java.io.FileInputStream(override)) { bytes = readAll(input); }
-            else try (InputStream input = context.getAssets().open("config.json")) { bytes = readAll(input); }
-            return new JSONObject(new String(bytes, StandardCharsets.UTF_8));
+        // Try external config.json first; on any parse failure fall back to bundled assets/config.json.
+        if (override != null && override.isFile()) {
+            try (InputStream input = new java.io.FileInputStream(override)) {
+                return new JSONObject(new String(readAll(input), StandardCharsets.UTF_8));
+            } catch (Exception failure) {
+                Log.w("XgimiHome.Config", "External config.json invalid; falling back to bundled", failure);
+            }
+        }
+        try (InputStream input = context.getAssets().open("config.json")) {
+            return new JSONObject(new String(readAll(input), StandardCharsets.UTF_8));
         } catch (Exception failure) {
-            Log.w("XgimiHome.Config", "Using built-in defaults", failure);
+            Log.w("XgimiHome.Config", "Bundled config.json unavailable; using defaults", failure);
             return new JSONObject();
         }
     }

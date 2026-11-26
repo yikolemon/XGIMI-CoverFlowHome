@@ -152,6 +152,7 @@ final class CoverFlowHome {
         libraryButton.setNextFocusDownId(carousel.getId());
         wallpaper.setOnImageChanged(() -> {
             updateFrost();
+            root.setBackgroundColor(wallpaper.hasImage() ? android.graphics.Color.TRANSPARENT : config.backgroundColor);
             reportReady();
         });
         carousel.setOnArtworkReady(this::reportReady);
@@ -210,10 +211,11 @@ final class CoverFlowHome {
             if (launch == null) launch = pm.getLaunchIntentForPackage(pkg);
             if (launch == null) continue;
             try {
+                android.content.pm.PackageInfo info = pm.getPackageInfo(pkg, 0);
                 String label = config.appLabels.get(pkg);
-                if (label == null) label = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
-                long updated = pm.getPackageInfo(pkg, 0).lastUpdateTime;
-                apps.add(new CoverFlowView.App(pkg, label, updated));
+                if (label == null) label = info.applicationInfo != null
+                        ? pm.getApplicationLabel(info.applicationInfo).toString() : pkg;
+                apps.add(new CoverFlowView.App(pkg, label, info.lastUpdateTime));
                 loadedPackages.add(pkg);
             } catch (PackageManager.NameNotFoundException | RuntimeException unavailable) {
                 // A concurrent uninstall or broken resource must not take the desktop down.
@@ -362,6 +364,7 @@ final class CoverFlowHome {
         carousel.clearArtwork();
         sampledWallpaper.clear();
         wallpaper.trim();
+        root.setBackgroundColor(config.backgroundColor);
     }
 
     void home() {
@@ -378,6 +381,7 @@ final class CoverFlowHome {
         carousel.clearArtwork();
         sampledWallpaper.clear();
         wallpaper.trim();
+        root.setBackgroundColor(config.backgroundColor);
     }
 
     void close() {

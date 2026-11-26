@@ -2,16 +2,28 @@ package com.gathin.tvhome;
 
 import java.util.Locale;
 
-/** Remote/timing/budget rules independent of Android, for deterministic regression tests. */
+/** Remote/timing/selection rules independent of Android, for deterministic regression tests. */
 final class ScreensaverRules {
     static final long UP_WINDOW_MS = 2000, BACK_WINDOW_MS = 600;
     static final int MAX_VIDEOS = 20;
-    static final long MAX_VIDEO_BYTES = 512L * 1024 * 1024;
-    static final long MAX_BATCH_BYTES = 2L * 1024 * 1024 * 1024;
-    static final long RESERVED_BYTES = 64L * 1024 * 1024;
+    static final int MAX_FOLDER_ENTRIES = 1000;
+    static final int DEFAULT_VOLUME_PERCENT = 100;
     static final int[] TIMEOUT_MINUTES = {0, 1, 5, 10, 15, 30, 60};
+    static final int[] VOLUME_PERCENTS = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
 
     private ScreensaverRules() { }
+
+    static int clampVolumePercent(int percent) {
+        return Math.max(0, Math.min(100, percent));
+    }
+
+    static int adjustVolumePercent(int current, int delta) {
+        return clampVolumePercent(current + delta);
+    }
+
+    static float playerVolume(int percent) {
+        return clampVolumePercent(percent) / 100f;
+    }
 
     static long idleDelay(long lastInput, long now, int minutes, boolean active, boolean hasVideos) {
         if (!active || !hasVideos || minutes <= 0) return -1;
@@ -27,18 +39,13 @@ final class ScreensaverRules {
                 || lower.endsWith(".mkv") || lower.endsWith(".3gp") || lower.endsWith(".mov");
     }
 
-    static boolean withinBudget(long videoBytes, long batchBytes, long freeBytes) {
-        return videoBytes > 0 && videoBytes <= MAX_VIDEO_BYTES && batchBytes >= videoBytes
-                && batchBytes <= MAX_BATCH_BYTES && freeBytes >= RESERVED_BYTES;
+    static int chooserIndex(int current, int delta, int count) {
+        if (count <= 0) return 0;
+        return (int) Math.max(0L, Math.min(count - 1L, (long) current + delta));
     }
 
-    static String importName(String name) {
-        if (name == null) throw new IllegalArgumentException("Missing video name");
-        String safe = name.replaceAll("[\\p{Cntrl}/\\\\]", "_");
-        if (!videoName(safe)) throw new IllegalArgumentException("Unsupported video extension");
-        // Bound UTF-8 filename bytes too: e.g. 100 Chinese characters exceed Android's 255-byte limit.
-        int end = safe.length() > 70 && Character.isHighSurrogate(safe.charAt(59)) ? 59 : 60;
-        return safe.length() <= 70 ? safe : safe.substring(0, end) + safe.substring(safe.lastIndexOf('.'));
+    static boolean shouldRestartVideo(int next, int playing, boolean ready) {
+        return next != playing || !ready;
     }
 
     static final class UpSequence {

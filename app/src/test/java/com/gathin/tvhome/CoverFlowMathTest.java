@@ -71,4 +71,24 @@ public class CoverFlowMathTest {
             }
         }
     }
+
+    @Test public void hermiteGlideSettlesWithoutOvershootAndPreservesMomentum() {
+        float[] out = new float[2];
+        float prev = 0f;
+        for (int frame = 1; frame <= 20; frame++) {
+            long running = CoverFlowMath.stepHermite(0f, 0f, 1f, frame / 60f, 0.34f, out);
+            assertEquals(1L, running);
+            assertTrue(out[0] >= prev);
+            assertTrue(out[0] <= 1.0001f);
+            prev = out[0];
+        }
+        assertEquals(0L, CoverFlowMath.stepHermite(0f, 0f, 1f, 0.34f, 0.34f, out));
+        assertEquals(1f, out[0], 0.0001f);
+        assertEquals(0f, out[1], 0.0001f);
+
+        // Mid-flight retargeting preserves initial velocity cleanly at t = 0.
+        assertEquals(1L, CoverFlowMath.stepHermite(0.5f, 3.0f, 2f, 0f, 0.34f, out));
+        assertEquals(0.5f, out[0], 0.0001f);
+        assertEquals(3.0f, out[1], 0.0001f);
+    }
 }

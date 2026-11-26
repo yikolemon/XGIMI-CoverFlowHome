@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="home_load_failed">桌面加载失败，按确定键重试。</string>
   <string name="app_name">极米桌面</string>
@@ -35,22 +35,33 @@
   <string name="wallpaper_applied">壁纸已更新。</string>
     <string name="screensaver_title">视频屏保</string>
     <string name="screensaver_loading">正在读取本地视频…</string>
-    <string name="screensaver_no_videos">暂无视频，请在壁纸设置 → 视频屏保中导入。</string>
+    <string name="screensaver_no_videos">暂无可用视频，请在壁纸设置 → 视频屏保中选择或刷新视频文件夹。</string>
     <string name="screensaver_play_hint">按下选片 · 双击返回退出</string>
     <string name="screensaver_back_again">再快速按一次返回退出屏保</string>
     <string name="screensaver_play_failed">视频无法播放。按下重新选片，双击返回退出。</string>
-    <string name="screensaver_import">导入本地视频（替换集合）</string>
+    <string name="screensaver_folder_choose">选择视频文件夹</string>
+    <string name="screensaver_volume">屏保音量：%1$d%%</string>
+    <string name="screensaver_volume_title">屏保音量</string>
+    <string name="screensaver_volume_option">%1$d%%</string>
     <string name="screensaver_timeout_off">自动屏保：关闭</string>
     <string name="screensaver_timeout_minutes">自动屏保：桌面无操作 %1$d 分钟</string>
     <string name="screensaver_timeout_title">桌面无操作时长</string>
-    <string name="screensaver_mute">视频静音</string>
-    <string name="screensaver_preview">立即启动屏保</string>
     <string name="screensaver_refresh">刷新本地视频目录</string>
-    <string name="screensaver_remove">移除已导入的视频集合</string>
-    <string name="screensaver_remove_confirm">移除导入的视频？外部 screensaver 目录中的文件不会删除。</string>
-    <string name="screensaver_settings_hint">桌面焦点进入右上角按钮后，2 秒内独立按上三次启动。\n屏保中按下显示封面条；双击返回退出；默认静音循环。\n最多 20 个视频，单个 512 MiB，每次导入共 2 GiB。推荐 1080p H.264 MP4。\n没有文件选择器时，将视频放到以下目录后刷新：\n%1$s</string>
-    <string name="screensaver_no_picker">没有可用的视频选择器。请将视频放到下方目录后刷新。</string>
-    <string name="screensaver_import_failed">更新失败，请检查视频类型、大小、剩余空间和访问权限；原视频保留。</string>
-    <string name="screensaver_imported">视频集合已更新</string>
+    <string name="screensaver_folder_unbind">取消文件夹绑定</string>
+    <string name="screensaver_folder_unbind_confirm">取消当前文件夹绑定？不会删除任何视频文件。</string>
+    <string name="screensaver_folder_none">尚未绑定视频文件夹</string>
+    <string name="screensaver_folder_updated">视频文件夹已更新，原文件未改动</string>
+    <string name="screensaver_folder_empty">该文件夹内没有支持的视频（不含子目录），保留原文件夹。</string>
+    <string name="screensaver_folder_unavailable">文件夹不可用，请检查存储设备，或重新选择文件夹。</string>
+    <string name="screensaver_folder_permission">没有视频访问权限，请允许读取视频或重新授权文件夹。</string>
+    <string name="screensaver_folder_option">%1$s · %2$d 个视频</string>
+    <string name="screensaver_folder_library_empty">未找到媒体库视频目录，可使用应用视频目录</string>
+    <string name="screensaver_local_folder">使用应用视频目录</string>
+    <string name="screensaver_folder_limited">按名称显示前 %1$d 个视频</string>
+    <string name="screensaver_skipping">视频不可用，正在尝试下一条</string>
+    <string name="screensaver_playing">正在播放</string>
+    <string name="screensaver_choose_to_play">确认播放</string>
+    <string name="screensaver_chooser_keys">← → 选择    确认播放    ↑ 收起</string>
+    <string name="screensaver_chooser_position">%1$d / %2$d · %3$s</string>
     <string name="screensaver_video_count">可用本地视频：%1$d 个</string>
 </resources>

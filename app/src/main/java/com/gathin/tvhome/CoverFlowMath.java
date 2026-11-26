@@ -35,15 +35,39 @@ final class CoverFlowMath {
     }
 
     static float scale(float distance) {
-        return Math.max(0.66f, 1f - Math.min(Math.abs(distance), 2f) * 0.16f);
+        float d = Math.abs(distance);
+        return 0.66f + 0.34f / (1f + 0.72f * d * d);
     }
 
     static float rotation(float distance) {
-        return -Math.max(-1f, Math.min(1f, distance)) * 16f;
+        float u = Math.max(-1f, Math.min(1f, distance / 1.25f));
+        float smooth = u * (1.5f - 0.5f * u * u);
+        return -smooth * 16f;
     }
 
     static float offset(float distance, float width) {
         float d = Math.abs(distance);
-        return Math.signum(distance) * width * (Math.min(d, 1f) * 1.13f + Math.max(0f, d - 1f) * 0.82f);
+        return distance * width * (0.82f + 0.44f / (1f + 0.42f * d * d));
+    }
+
+    /** Velocity-preserving cubic Hermite step; settles at target with zero velocity in {@code duration}. */
+    static long stepHermite(float startPos, float startVel, float target, float elapsed, float duration, float[] out) {
+        if (elapsed >= duration || duration <= 0f) {
+            out[0] = target;
+            out[1] = 0f;
+            return 0L;
+        }
+        float u = Math.max(0f, elapsed / duration);
+        float delta = target - startPos;
+        float m0 = startVel * duration;
+        // Clamp entry tangent so rapid same-direction taps keep momentum without overshooting.
+        if (delta > 0f && m0 > 2.5f * delta) m0 = 2.5f * delta;
+        else if (delta < 0f && m0 < 2.5f * delta) m0 = 2.5f * delta;
+        else if (Math.abs(m0) > 1.8f) m0 = Math.copySign(1.8f, m0);
+        float u2 = u * u;
+        float u3 = u2 * u;
+        out[0] = startPos + delta * (3f * u2 - 2f * u3) + m0 * (u3 - 2f * u2 + u);
+        out[1] = (6f * delta * u * (1f - u) + m0 * (3f * u2 - 4f * u + 1f)) / duration;
+        return 1L;
     }
 }
