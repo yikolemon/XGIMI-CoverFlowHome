@@ -6,6 +6,8 @@ A lightweight, remote-first Android TV home launcher featuring a 3D Cover Flow c
 
 Application ID: **`com.gathin.tvhome`** · Current version: **2.7.0**
 
+![XGIMI Home demo](docs/demo.gif)
+
 ![XGIMI Home screenshot](docs/screenshot.png)
 
 ## Highlights

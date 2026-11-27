@@ -8,6 +8,8 @@
 - **当前版本**：**v2.7.0**
 - **核心特点**：安装包仅约 `1.1 MB`、常驻内存约 `26 MB`、无后台常驻服务、不会擅自篡改系统默认桌面。
 
+![XGIMI Home 演示动图](docs/demo.gif)
+
 ![XGIMI Home 桌面截图](docs/screenshot.png)
 
 ---
